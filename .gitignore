@@ -45,27 +45,5 @@ scratchpad.md
 temp/
 tmp/
 
-# Downloaded media (for testing)
-*.mp4
-*.webm
-*.m4a
-*.mp3
-
-# Large model files
-ggml-model-fi-large-v3.bin
-
-# Qualitative test outputs (extracted videos)
-tests/youtube-to-markdown/qualitative/videos/
-
-# YTM intermediate work files (kept with --debug)
-examples/youtube_*
-
-# Screenshots
-*.png
-
-# Chrome test profiles
-chromectl-profile/
-chromectl-test*/
-
 # Serena MCP
 .serena/

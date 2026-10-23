@@ -1,8 +1,5 @@
 """Prompt-injection defense for untrusted text reaching the LLM.
 
-Canonical source — copies live in chrome-control/, firefox-control/,
-youtube-to-markdown/, and wiki research scripts.
-Keep in sync: copy this file, do not import across plugin boundaries.
 
 Covers OWASP LLM01:2025 + Hines spotlighting:
 - NFKC normalization (silent)

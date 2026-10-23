@@ -5,31 +5,11 @@
     "email": "marketplace@vre.iki.fi"
   },
   "metadata": {
-    "description": "Knowledge work, context management, and productivity tools/skills/etc. for Claude Code",
+    "description": "Lightweight IMAP email access for Claude Code, as an MCP server or a skill-backed CLI",
     "version": "20260922.2300",
     "pluginRoot": "./"
   },
   "plugins": [
-    {
-      "name": "youtube-to-markdown",
-      "source": "./youtube-to-markdown",
-      "description": "Transform YouTube video to storagable knowledge. Choose from summary only, transcript only, comments only, or full extraction. Get tight summary, cleaned transcript, curated comment insights, and watch guide with WATCH/SKIM/READ-ONLY gate. Browse channels to batch-extract or refresh comments. Modular architecture runs independent steps in parallel.",
-      "version": "3.0.0",
-      "category": "media-extraction",
-      "keywords": [
-        "youtube",
-        "transcript",
-        "captions",
-        "markdown",
-        "summary",
-        "chapters",
-        "comments",
-        "channel"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
     {
       "name": "imap-slim-mcp",
       "source": "./imap-slim",
@@ -54,41 +34,6 @@
         "imap",
         "cli",
         "skill"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "chrome-control",
-      "source": "./chrome-control",
-      "description": "Control Chrome via CDP \u2014 debug web apps, run JavaScript, take screenshots, monitor console. Connects to your running Chrome session (M144+) or launches a separate instance.",
-      "version": "1.0.0",
-      "category": "browser-automation",
-      "keywords": [
-        "chrome",
-        "cdp",
-        "devtools",
-        "debugging",
-        "screenshots",
-        "browser"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "firefox-control",
-      "source": "./firefox-control",
-      "description": "TEST TOOL: Control Firefox via WebDriver BiDi. Direct WebSocket, no geckodriver. Daemon mode with persistent connection. navigator.webdriver=true kills production use \u2014 proves BiDi works, documents why Firefox fails for agent automation.",
-      "version": "0.2.0",
-      "category": "browser-automation",
-      "keywords": [
-        "firefox",
-        "bidi",
-        "webdriver",
-        "browser",
-        "automation"
       ],
       "skills": [
         "./"

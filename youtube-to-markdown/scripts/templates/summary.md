@@ -1,5 +1,0 @@
-## Video
-
-{metadata}
-
-{summary}

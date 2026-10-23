@@ -4,42 +4,6 @@
 
 Tests are organized in `tests/` directory by project type.
 
-### Skills
-
-```
-tests/youtube-to-markdown/
-├── test_assembler.py
-├── test_channel_listing.py
-├── test_check_existing.py
-├── test_check_view_growth.py
-├── test_checkbox_parsing.py
-├── test_comment_extractor.py
-├── test_comment_filter.py
-├── test_comment_filter_tiers.py
-├── test_concat_cleaned_script.py
-├── test_content_safety.py
-├── test_file_ops.py
-├── test_heatmap.py
-├── test_insert_headings_from_json_script.py
-├── test_list_channel_script.py
-├── test_merge_tier2.py
-├── test_paragraph_breaker.py
-├── test_paragraph_breaker_regression.py
-├── test_paragraph_break_planner.py
-├── test_parse_channel_entry.py
-├── test_prepare_update.py
-├── test_run_dispatcher.py
-├── test_shared_types.py
-├── test_split_for_cleaning_script.py
-├── test_transcript_extractor.py
-├── test_update_metadata.py
-├── test_vtt_deduplicator.py
-├── test_watch_guide.py
-└── test_youtube_extractor.py
-```
-
-### MCP Servers
-
 ```
 tests/imap-slim/
 ├── test_account_param.py
@@ -66,25 +30,6 @@ tests/imap-slim/
 ├── test_session.py
 ├── test_setup.py
 └── test_tool_description.py
-
-tests/obsidian-slim-mcp/
-├── test_cli.py
-├── test_client.py
-└── test_mcp.py
-```
-
-### Browser Automation
-
-```
-tests/chrome-control/
-├── test_chromectl.py       # 84 unit tests (mocked CDP, no Chrome needed)
-├── test_integration.sh     # Integration tests against real Chrome
-└── test_idle_shutdown.sh   # Daemon idle timeout tests (real Chrome)
-
-tests/firefox-control/
-├── test_firefoxctl_daemon.py  # Daemon unit tests
-├── test_navigate_swap.py      # Context-swap recovery for navigate and open
-└── test_integration.sh        # Integration tests against real Firefox
 ```
 
 ## Running Tests
@@ -93,52 +38,13 @@ tests/firefox-control/
 # Run all tests
 cd tests && uv run pytest
 
-# Run specific project tests
-cd tests && uv run pytest youtube-to-markdown/
-cd tests && uv run pytest imap-slim/
-cd tests && uv run pytest obsidian-slim-mcp/
-
-# chrome-control
-cd tests && uv run pytest chrome-control/
-
-# firefox-control
-cd tests && uv run pytest firefox-control/
-
-# chrome-control integration (requires Chrome with remote debugging enabled)
-cd tests/chrome-control && bash test_integration.sh
-cd tests/chrome-control && bash test_idle_shutdown.sh
-
-# firefox-control integration (requires Firefox with --remote-debugging-port 9223)
-cd tests/firefox-control && bash test_integration.sh
+# Run one file
+cd tests && uv run pytest imap-slim/test_search_criteria.py
 
 # Common options
 uv run pytest -v              # Verbose
 uv run pytest -x              # Stop on first failure
 uv run pytest -k "pattern"    # Run tests matching pattern
-```
-
-## Release Validation (youtube-to-markdown)
-
-```bash
-# From plugin directory
-cd youtube-to-markdown
-uv run pytest -q
-uv run ruff check lib scripts formats subskills
-
-# Optional manual smoke test (network required)
-uv run python3 ./scripts/22_list_channel.py "https://www.youtube.com/channel/UCPjNBjflYl0-HQtUvOx0Ibw" /tmp/channel-test --limit 50
-
-# Prompt-only optimization checks (interactive)
-# - Run extraction option A and verify subagent TaskOutput stays one-line per step
-# - Run 3+ sequential extractions and verify no compaction event in historian
-# - Run update flow: Re-extract transcript on existing extraction
-
-# Summary format routing checks (interactive)
-# - Run TIPS video: verify flat-bullets output (category groupings, no Hidden Gems)
-# - Run TUTORIAL video: verify step-list output (numbered steps, Prerequisites, Result)
-# - Run long multi-theme INTERVIEW: verify themed-claims output (### Theme sections)
-# - Run default/EDUCATIONAL video: verify claim-bullets output (TL;DR + claim list + Hidden Gems)
-# - Verify Step 1 reports [TYPE] in status message
 ```
 
 ## Design Principles

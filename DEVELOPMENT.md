@@ -2,14 +2,9 @@
 
 ## Project-Level Development Setup
 
-When developing this project, skills and MCP servers point directly to local directories:
+When developing this project, the MCP server points directly to local directories:
 
-**Skills** (`.claude/skills/`):
-```
-youtube-to-markdown -> ../../youtube-to-markdown  (symlink)
-```
-
-**MCP Servers** ('.mcp.json'):
+**MCP Server** ('.mcp.json'):
 ```json
 {
   "mcpServers": {
@@ -24,17 +19,8 @@ youtube-to-markdown -> ../../youtube-to-markdown  (symlink)
 This setup ensures:
 - Always using latest development version
 - No reinstall needed after changes
-- Same pattern for both skills and MCP servers
 
-**Browser automation** (`chrome-control/`, `firefox-control/`):
-```
-chrome-control/chromectl.py      (standalone CLI, uv inline deps, CDP)
-chrome-control/SKILL.md          (Claude Code skill definition)
-firefox-control/firefoxctl.py    (standalone CLI, uv inline deps, WebDriver BiDi)
-firefox-control/SKILL.md         (Claude Code skill definition)
-```
-
-Note: MCP sub-projects carry their own server config with `${CLAUDE_PLUGIN_ROOT}` for standalone installation. `imap-slim` names it `mcp-server.json`, deliberately not `.mcp.json`: a `.mcp.json` at a plugin root is auto-discovered and would start the server for the CLI install too. Browser automation tools have no MCP server — they are CLI tools and skills.
+Note: the plugin carries its own server config with `${CLAUDE_PLUGIN_ROOT}` for standalone installation. `imap-slim` names it `mcp-server.json`, deliberately not `.mcp.json`: a `.mcp.json` at a plugin root is auto-discovered and would start the server for the CLI install too.
 
 ## Dev Skills from flow-jigs
 
@@ -70,7 +56,7 @@ When installing marketplace from local directory (`/plugin marketplace add /xxx/
 
 ```bash
 /plugin marketplace add "$PWD"
-/plugin install youtube-to-markdown@flow-state
+/plugin install imap-slim-mcp@flow-state
 ```
 
 ### Validation
@@ -82,8 +68,8 @@ claude plugin validate .
 ### Iterative Development
 
 1. Add local marketplace: `/plugin marketplace add /xxx/flow-state`
-2. Install plugin: `/plugin install youtube-to-markdown@flow-state`
-3. Edit scripts/SKILL.md in `/xxx/flow-state/youtube-to-markdown/`
+2. Install plugin: `/plugin install imap-slim-mcp@flow-state`
+3. Edit sources or SKILL.md in `/xxx/flow-state/imap-slim/`
 4. Changes are live (may need Claude reload)
 5. Test, iterate, repeat
 
@@ -105,9 +91,6 @@ When releasing a plugin update from a worktree branch:
 4. Validate after rebase:
    - run tests for affected plugin(s)
    - run lints/checks for changed files
-5. For prompt-only workflow changes:
-   - run interactive extraction regression checks
-   - verify context/token behavior with historian session inspection
 
 ## Environment traps
 
@@ -118,5 +101,5 @@ When releasing a plugin update from a worktree branch:
   an environment and the wrong one for proving a packaging change: a broken `pyproject.toml` passed
   in a worktree and failed on main, where nothing was frozen.
 - **Pin a dependency that renames its public API.** `mcp>=1.0.0` resolved to 2.x, which removed
-  `mcp.server.fastmcp`, and both MCP plugins were dead on any fresh install while existing
+  `mcp.server.fastmcp`, and the MCP plugin was dead on any fresh install while existing
   environments kept working. Unbounded upper ranges hide this until someone installs.

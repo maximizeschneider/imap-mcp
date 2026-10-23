@@ -1,7 +1,0 @@
-## Description
-
-{description}
-
-## Transcription
-
-{transcription}

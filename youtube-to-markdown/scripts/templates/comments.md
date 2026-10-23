@@ -1,3 +1,0 @@
-## Curated Comments
-
-{comments}

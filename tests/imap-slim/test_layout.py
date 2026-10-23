@@ -40,8 +40,7 @@ class TestOldPathsStillResolve:
 class TestRenderHoldsTheSharedHelpers:
     """POTENTIAL_INJECTION_NOTICE is deliberately absent: nothing in imap-slim
     referenced it, before this cut or after. It was dead in imap_stream_mcp.py
-    and was not carried into a new module. youtube-to-markdown has its own
-    same-named constant, which is unrelated."""
+    and was not carried into a new module."""
 
     SHARED = (
         "format_flags",

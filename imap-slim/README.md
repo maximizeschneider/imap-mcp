@@ -36,7 +36,7 @@ Inspired by [Jesse Vincent's MCP design philosophy](https://blog.fsck.com/2025/1
 ### Claude Code
 
 ```bash
-claude plugin marketplace add vre/flow-state
+claude plugin marketplace add maximizeschneider/imap-mcp
 claude plugin install imap-slim-mcp@flow-state
 ```
 
@@ -65,7 +65,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### Other Coding Agents
 
-Tell your LLM to install the MCP server from `https://github.com/vre/flow-state/imap-slim`
+Tell your LLM to install the MCP server from `https://github.com/maximizeschneider/imap-mcp/imap-slim`
 
 ### Manual
 
