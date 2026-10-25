@@ -1,0 +1,75 @@
+{
+  "manifest_version": "0.4",
+  "name": "imap-slim",
+  "display_name": "IMAP Slim",
+  "version": "2.2.0",
+  "description": "Read, search, flag and draft email over IMAP. Drafts only - nothing is ever sent.",
+  "long_description": "Connects Claude to one IMAP mailbox. Claude can list, read and search mail, flag messages, save attachments and write drafts (including replies that quote the original). It never sends mail: drafts land in your Drafts folder for you to review and send from your mail program. For Gmail, iCloud and Outlook use an app password, not your normal password.",
+  "author": {
+    "name": "Ville Reijonen"
+  },
+  "license": "MIT",
+  "keywords": ["email", "imap", "mail", "drafts"],
+  "server": {
+    "type": "uv",
+    "entry_point": "imap_stream_mcp.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "imap_stream_mcp.py"],
+      "env": {
+        "IMAP_SLIM_SERVER": "${user_config.server}",
+        "IMAP_SLIM_PORT": "${user_config.port}",
+        "IMAP_SLIM_USERNAME": "${user_config.username}",
+        "IMAP_SLIM_PASSWORD": "${user_config.password}",
+        "IMAP_SLIM_FROM": "${user_config.from_address}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "use_mail",
+      "description": "List, read, search and flag mail, save attachments, and create or replace drafts."
+    }
+  ],
+  "user_config": {
+    "server": {
+      "type": "string",
+      "title": "IMAP server",
+      "description": "For example imap.gmail.com, imap.mail.me.com or outlook.office365.com",
+      "required": true
+    },
+    "port": {
+      "type": "number",
+      "title": "IMAP port",
+      "description": "993 for almost every provider",
+      "default": 993,
+      "min": 1,
+      "max": 65535
+    },
+    "username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Usually your full email address",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Gmail, iCloud and Outlook need an app password here, not your normal password",
+      "sensitive": true,
+      "required": true
+    },
+    "from_address": {
+      "type": "string",
+      "title": "Your email address (optional)",
+      "description": "Only needed if your username is not your email address. Used as From in drafts.",
+      "default": ""
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  }
+}

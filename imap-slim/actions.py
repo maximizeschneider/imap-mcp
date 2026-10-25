@@ -19,6 +19,7 @@ from imap_client import (
     cleanup_attachments,
     create_draft,
     download_attachment,
+    env_login,
     fetch_quotable,
     get_default_account,
     get_from_address,
@@ -476,6 +477,9 @@ def run_action(params: MailAction) -> str:
         if action == "accounts":
             accounts = list_accounts()
             default = get_default_account()
+
+            if not accounts and (login := env_login()):
+                accounts, default = [login], login
 
             if not accounts:
                 plugin_dir = Path(__file__).parent.resolve()

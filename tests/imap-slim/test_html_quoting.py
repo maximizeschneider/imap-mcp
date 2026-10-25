@@ -217,6 +217,54 @@ class TestTheSenderAddress:
         assert get_from_address("acc@example.com") == "acc@example.com"
 
 
+class TestTheSenderAddressFromEnvironment:
+    """Desktop extensions pass credentials as env vars only, with no keychain
+    account - the From lookup must not come back empty there."""
+
+    def test_an_explicit_address_is_used(self, fake_keyring, monkeypatch):
+        from imap_client import get_from_address
+
+        monkeypatch.setenv("IMAP_SLIM_FROM", "me@example.com")
+        monkeypatch.setenv("IMAP_SLIM_USERNAME", "vre")
+        assert get_from_address() == "me@example.com"
+
+    def test_a_login_that_is_an_address_is_used(self, fake_keyring, monkeypatch):
+        from imap_client import get_from_address
+
+        monkeypatch.delenv("IMAP_SLIM_FROM", raising=False)
+        monkeypatch.setenv("IMAP_SLIM_SERVER", "imap.example.com")
+        monkeypatch.setenv("IMAP_SLIM_USERNAME", "me@example.com")
+        assert get_from_address() == "me@example.com"
+
+    def test_a_keychain_account_wins_over_the_environment(self, fake_keyring, monkeypatch):
+        from imap_client import get_from_address
+
+        fake_keyring.set_password("imap-slim", "accounts", '["acc"]')
+        fake_keyring.set_password("imap-slim", "acc:from_address", "kc@example.com")
+        monkeypatch.setenv("IMAP_SLIM_FROM", "env@example.com")
+        assert get_from_address() == "kc@example.com"
+
+
+class TestNoKeychainBackend:
+    """A machine without a keychain backend raises on every read. The env
+    credentials must still be used rather than the error reaching the user."""
+
+    def test_env_credentials_are_used(self, fake_keyring, monkeypatch):
+        from imap_client import get_credentials, get_from_address
+
+        def no_backend(*_):
+            raise fake_keyring.errors.NoKeyringError("No recommended backend")
+
+        monkeypatch.setattr(fake_keyring, "get_password", no_backend)
+        monkeypatch.setenv("IMAP_SLIM_SERVER", "imap.example.com")
+        monkeypatch.setenv("IMAP_SLIM_USERNAME", "me@example.com")
+        monkeypatch.setenv("IMAP_SLIM_PASSWORD", "pw")
+        monkeypatch.delenv("IMAP_SLIM_PORT", raising=False)
+        monkeypatch.delenv("IMAP_SLIM_FROM", raising=False)
+        assert get_credentials() == ("imap.example.com", "993", "me@example.com", "pw")
+        assert get_from_address() == "me@example.com"
+
+
 class TestInlineDisposition:
     """Thunderbird marks carried images inline. With `attachment` a client lists
     them at the bottom instead of showing them inside the quote."""
@@ -236,3 +284,26 @@ class TestInlineDisposition:
         images = [p for p in parsed.walk() if p.get_content_type() == "image/png"]
         assert [p.get_content_disposition() for p in images] == ["inline"]
         assert images[0].get_filename() == "image.png"
+
+
+class TestAccountsWithEnvCredentials:
+    """With env-only credentials the accounts action must not tell the user to
+    run setup.py - a Desktop extension user has no terminal and no setup.py."""
+
+    def test_the_env_login_is_listed(self, fake_keyring, monkeypatch):
+        import actions
+        from imap_stream_mcp import MailAction
+
+        monkeypatch.setenv("IMAP_SLIM_SERVER", "imap.example.com")
+        monkeypatch.setenv("IMAP_SLIM_USERNAME", "me@example.com")
+        out = actions.run_action(MailAction(action="accounts"))
+        assert "me@example.com" in out
+        assert "setup.py" not in out
+
+    def test_nothing_configured_still_explains_setup(self, fake_keyring, monkeypatch):
+        import actions
+        from imap_stream_mcp import MailAction
+
+        for var in ("IMAP_SLIM_SERVER", "IMAP_STREAM_SERVER"):
+            monkeypatch.delenv(var, raising=False)
+        assert "No Accounts Configured" in actions.run_action(MailAction(action="accounts"))

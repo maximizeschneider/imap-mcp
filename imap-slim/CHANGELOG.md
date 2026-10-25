@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.2.0] - 2026-10-25
+
+### Added
+
+- **Claude Desktop extension.** `manifest.json` packs the server into an `.mcpb` with
+  `npx @anthropic-ai/mcpb pack imap-slim`. Desktop installs Python and the dependencies (uv
+  runtime) and asks for server, port, username, password and an optional From address; they
+  reach the server as `IMAP_SLIM_*` env vars. One account.
+- `IMAP_SLIM_FROM` sets the From address when credentials come from the environment.
+
+### Fixed
+
+- **Attachment path guard did nothing on Windows.** It matched string prefixes ending in `/`,
+  so files under `.ssh` and other dotdirs were attachable. Paths are compared by component now,
+  case-insensitively on Windows.
+- **Env-only credentials gave drafts an empty From**: the lookup read only the keychain.
+- **No keychain backend raised** instead of falling back to env credentials.
+- **`accounts` with env-only credentials** said nothing was configured and pointed at `setup.py`.
+
 ## [2.1.0] - 2026-09-22
 
 Relative to 2.0.0.

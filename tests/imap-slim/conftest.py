@@ -418,8 +418,14 @@ class _FakeKeyring:
     data. An autouse fixture installs this for every test.
     """
 
-    class errors:  # mirrors keyring.errors.PasswordDeleteError
-        class PasswordDeleteError(Exception):
+    class errors:  # mirrors keyring.errors
+        class KeyringError(Exception):
+            pass
+
+        class PasswordDeleteError(KeyringError):
+            pass
+
+        class NoKeyringError(KeyringError, RuntimeError):
             pass
 
     def __init__(self):

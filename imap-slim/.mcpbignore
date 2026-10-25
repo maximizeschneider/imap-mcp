@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+uv.lock
+CHANGELOG.md
+TODO.md
+SKILL.md
+mcp-server.json
+debug_imap.py
+setup.py
+*.mcpb

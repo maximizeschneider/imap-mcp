@@ -48,7 +48,20 @@ claude plugin install imap-slim-cli@flow-state
 
 Then configure credentials (see below).
 
-### Claude Desktop
+### Claude Desktop (extension, no setup)
+
+1. Download `imap-slim-<version>.mcpb`.
+2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it.
+3. Fill in server, username and password. Gmail, iCloud and Outlook need an
+   [app password](https://support.google.com/accounts/answer/185833), not the normal one.
+
+Claude Desktop installs Python and the dependencies itself. One account only; for several, use
+the config file below with `setup.py`.
+
+Build it: `npx @anthropic-ai/mcpb pack imap-slim` from the repo root (`manifest.json`,
+`.mcpbignore`).
+
+### Claude Desktop (config file)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -231,6 +244,8 @@ mcp-server.json      # MCP config, named explicitly by the marketplace entry.
 
 ## Release Highlights
 
+- **v2.2.0** — Claude Desktop extension (`.mcpb`): install by drag and drop, credentials in a
+  form. Attachment path guard fixed on Windows.
 - **v2.1.0** — Replies: the client quotes the original, HTML and inline images included, with
   point-by-point replies for plain text.
 - **v2.0.0** — Skill-backed CLI alongside the MCP; `create`/`replace` named after IMAP; draft

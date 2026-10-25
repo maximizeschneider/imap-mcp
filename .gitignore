@@ -60,6 +60,9 @@ tests/youtube-to-markdown/qualitative/videos/
 # YTM intermediate work files (kept with --debug)
 examples/youtube_*
 
+# Desktop extension builds
+*.mcpb
+
 # Screenshots
 *.png
 

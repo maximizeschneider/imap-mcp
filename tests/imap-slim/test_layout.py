@@ -7,9 +7,11 @@ reason an already-installed plugin keeps working after the directory was renamed
 - deleting it would break the user's mail tool with nothing failing in CI.
 """
 
+import json
 from pathlib import Path
 
 import render
+import tomllib
 
 REPO = Path(__file__).resolve().parent.parent.parent
 
@@ -62,3 +64,21 @@ class TestRenderHoldsTheSharedHelpers:
 
         for name in self.SHARED:
             assert getattr(actions, name) is getattr(render, name), f"{name} is a copy, not the shared one"
+
+
+class TestDesktopExtensionManifest:
+    """manifest.json is packed into the .mcpb; nothing else reads it, so drift
+    would only show after a user installed a mislabelled extension."""
+
+    def test_version_matches_the_package(self):
+        manifest = json.loads((REPO / "imap-slim" / "manifest.json").read_text())
+        pyproject = tomllib.loads((REPO / "imap-slim" / "pyproject.toml").read_text())
+        assert manifest["version"] == pyproject["project"]["version"]
+
+    def test_every_form_field_reaches_the_server(self):
+        manifest = json.loads((REPO / "imap-slim" / "manifest.json").read_text())
+        env = " ".join(manifest["server"]["mcp_config"]["env"].values())
+        for key, option in manifest["user_config"].items():
+            assert f"${{user_config.{key}}}" in env
+            # An unset optional field without a default is passed through as the literal placeholder.
+            assert option.get("required") or "default" in option, key

@@ -19,7 +19,7 @@ import re
 import sys
 import tempfile
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import html2text
 import keyring
@@ -104,12 +104,19 @@ def _migrate_legacy():
 
 
 def _keyring_get(key: str) -> str | None:
-    """Read from keychain: new name first, migrate from legacy if missing."""
-    val = keyring.get_password(SERVICE_NAME, key)
-    if val is not None:
-        return val
-    _migrate_legacy()
-    return keyring.get_password(SERVICE_NAME, key)
+    """Read from keychain: new name first, migrate from legacy if missing.
+
+    A machine with no keychain backend reads as empty, so env credentials
+    still apply. Other keychain errors (locked, access denied) propagate.
+    """
+    try:
+        val = keyring.get_password(SERVICE_NAME, key)
+        if val is not None:
+            return val
+        _migrate_legacy()
+        return keyring.get_password(SERVICE_NAME, key)
+    except keyring.errors.NoKeyringError:
+        return None
 
 
 # Standard IMAP flags (RFC 3501)
@@ -308,6 +315,13 @@ def get_credentials(account: str | None = None) -> tuple[str, str, str, str]:
     return server, port or "993", username, password
 
 
+def env_login() -> str | None:
+    """Login of the single account configured by environment variables, if any."""
+    if not (os.environ.get("IMAP_SLIM_SERVER") or os.environ.get("IMAP_STREAM_SERVER")):
+        return None
+    return os.environ.get("IMAP_SLIM_USERNAME") or os.environ.get("IMAP_STREAM_USERNAME") or None
+
+
 def get_from_address(account: str | None = None) -> str:
     """The address to put in From.
 
@@ -318,19 +332,22 @@ def get_from_address(account: str | None = None) -> str:
     """
     if account is None:
         account = get_default_account()
+    if account is None:
+        # No keychain account: credentials come from the environment (Desktop extension).
+        return os.environ.get("IMAP_SLIM_FROM") or env_login() or ""
 
-    stored = _keyring_get(f"{account}:from_address") if account else None
+    stored = _keyring_get(f"{account}:from_address")
     if stored:
         return stored
 
-    username = _keyring_get(f"{account}:imap_username") if account else None
+    username = _keyring_get(f"{account}:imap_username")
     if username and "@" in username:
         return username
-    if account and "@" in account:
+    if "@" in account:
         # Accounts are named by their address here, which is the last thing
         # that is certainly the user's own.
         return account
-    return username or account or ""
+    return username or account
 
 
 def list_accounts() -> list[str]:
@@ -1107,17 +1124,17 @@ def search_messages(folder: str, query: str, limit: int = 20, account: str = Non
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25 MB
 
 # Sensitive paths blocked from attachment (security: prevent data exfiltration)
-_BLOCKED_PATH_PREFIXES: list[str] = []
-_SAFE_PATH_PREFIXES: list[str] = []
+_BLOCKED_PATH_PREFIXES: list[Path] = []
+_SAFE_PATH_PREFIXES: list[Path] = []
 
 
 def _init_path_guards():
     """Initialize blocked and safe path prefix lists."""
-    home = str(Path.home().resolve())
+    home = Path.home().resolve()
     _BLOCKED_PATH_PREFIXES.clear()
     _BLOCKED_PATH_PREFIXES.extend(
         [
-            os.path.join(home, d)
+            home / d
             for d in [
                 ".ssh",
                 ".gnupg",
@@ -1136,19 +1153,46 @@ def _init_path_guards():
             ]
         ]
     )
-    _BLOCKED_PATH_PREFIXES.extend(["/etc/shadow", "/etc/passwd", "/etc/ssl/private"])
+    _BLOCKED_PATH_PREFIXES.extend(Path(p) for p in ["/etc/shadow", "/etc/passwd", "/etc/ssl/private"])
     _SAFE_PATH_PREFIXES.clear()
     _SAFE_PATH_PREFIXES.extend(
         [
-            str(Path("/tmp").resolve()) + "/",
-            os.path.join(home, "Downloads") + "/",
-            os.path.join(home, "Desktop") + "/",
-            os.path.join(home, "Documents") + "/",
+            Path("/tmp").resolve(),
+            Path(tempfile.gettempdir()).resolve(),
+            home / "Downloads",
+            home / "Desktop",
+            home / "Documents",
         ]
     )
 
 
 _init_path_guards()
+
+
+def _path_verdict(resolved: PurePath, home: PurePath, blocked: list[PurePath], safe: list[PurePath]) -> str | None:
+    """Judge a resolved path against the guard lists.
+
+    Compares path components, not strings: a string prefix with '/' never
+    matches a Windows path, and Windows paths are case-insensitive.
+
+    Returns:
+        None if safe, warning string if outside safe dirs.
+
+    Raises:
+        IMAPError: If path matches blocked sensitive locations.
+    """
+    for b in blocked:
+        # '.env' also covers '.env.local' and the like.
+        if resolved.is_relative_to(b) or (resolved.parent == b.parent and resolved.name.lower().startswith(b.name.lower() + ".")):
+            raise IMAPError(f"Blocked: '{resolved.name}' is in a sensitive location. Cannot attach files from {b}.")
+
+    if resolved.is_relative_to(home) and resolved != home and resolved.relative_to(home).parts[0].startswith("."):
+        raise IMAPError(f"Blocked: '{resolved.name}' is a dotfile/in a dotdir. Cannot attach files from hidden directories.")
+
+    if any(resolved.is_relative_to(s) for s in safe):
+        return None
+
+    return f"WARNING: '{resolved.name}' is outside common directories (Downloads, Documents, Desktop, temp)."
 
 
 def _check_attachment_path(path: Path) -> str | None:
@@ -1163,22 +1207,7 @@ def _check_attachment_path(path: Path) -> str | None:
     Raises:
         IMAPError: If path matches blocked sensitive locations.
     """
-    resolved = str(path.resolve())
-
-    for blocked in _BLOCKED_PATH_PREFIXES:
-        if resolved == blocked or resolved.startswith(blocked + "/") or resolved.startswith(blocked + "."):
-            raise IMAPError(f"Blocked: '{path.name}' is in a sensitive location. Cannot attach files from {blocked}.")
-
-    # Dotfiles/dotdirs in home
-    home = str(Path.home().resolve())
-    if resolved.startswith(home + "/."):
-        raise IMAPError(f"Blocked: '{path.name}' is a dotfile/in a dotdir. Cannot attach files from hidden directories.")
-
-    for safe in _SAFE_PATH_PREFIXES:
-        if resolved.startswith(safe):
-            return None
-
-    return f"WARNING: '{path.name}' is outside common directories (Downloads, Documents, Desktop, /tmp)."
+    return _path_verdict(path.resolve(), Path.home().resolve(), _BLOCKED_PATH_PREFIXES, _SAFE_PATH_PREFIXES)
 
 
 def _attach_files(msg: email.message.EmailMessage, paths: list[str]) -> list[dict]:

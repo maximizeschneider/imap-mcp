@@ -2,7 +2,7 @@
 
 import email
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +15,7 @@ from imap_client import (
     IMAPError,
     _attach_files,
     _find_all_boundaries,
+    _path_verdict,
     create_draft,
     decode_header_value,
     download_attachment,
@@ -1617,6 +1618,44 @@ class TestAttachFiles:
                 _attach_files(msg, [str(f)])
         finally:
             f.chmod(0o644)
+
+
+class TestAttachmentPathGuardOnWindows:
+    """The guard compared strings with '/', which a Windows path never contains,
+    so .ssh and other dotdirs were attachable there. PureWindowsPath runs the
+    Windows path rules on any OS."""
+
+    HOME = PureWindowsPath(r"C:\Users\anna")
+    BLOCKED = [HOME / ".ssh", HOME / ".env"]
+    SAFE = [HOME / "Downloads"]
+
+    def verdict(self, path: str):
+        return _path_verdict(PureWindowsPath(path), self.HOME, self.BLOCKED, self.SAFE)
+
+    def test_blocked_dir_is_refused(self):
+        with pytest.raises(IMAPError, match="sensitive"):
+            self.verdict(r"C:\Users\anna\.ssh\id_rsa")
+
+    def test_blocked_dir_is_refused_whatever_the_case(self):
+        with pytest.raises(IMAPError, match="sensitive"):
+            self.verdict(r"c:\users\ANNA\.SSH\id_rsa")
+
+    def test_blocked_prefix_with_suffix_is_refused(self):
+        with pytest.raises(IMAPError, match="sensitive"):
+            self.verdict(r"C:\Users\anna\.env.local")
+
+    def test_other_dotdir_in_home_is_refused(self):
+        with pytest.raises(IMAPError, match="dotfile"):
+            self.verdict(r"C:\Users\anna\.aws\credentials")
+
+    def test_safe_dir_passes_without_warning(self):
+        assert self.verdict(r"C:\Users\anna\Downloads\report.pdf") is None
+
+    def test_elsewhere_warns(self):
+        assert "WARNING" in self.verdict(r"D:\work\report.pdf")
+
+    def test_sibling_with_shared_prefix_is_not_safe(self):
+        assert "WARNING" in self.verdict(r"C:\Users\anna\DownloadsOld\report.pdf")
 
 
 class TestCreateDraftWithAttachments:

@@ -1,0 +1,39 @@
+# Local test mailbox: GreenMail (IMAP/SMTP, in-memory) + Roundcube webmail.
+# Needs certs/localhost.p12 from mkcert first - see README.md.
+services:
+  greenmail:
+    image: greenmail/standalone:2.1.14
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.all
+        -Dgreenmail.hostname=0.0.0.0
+        -Dgreenmail.users=anna:secret@localhost
+        -Dgreenmail.tls.keystore.file=/certs/localhost.p12
+        -Dgreenmail.tls.keystore.password=changeit
+        -Dgreenmail.tls.key.password=changeit
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "127.0.0.1:3025:3025"   # SMTP
+      - "127.0.0.1:3143:3143"   # IMAP, plain - seeding and Roundcube
+      - "127.0.0.1:3993:3993"   # IMAPS - what the extension uses
+
+  # Fills the mailbox on `docker compose up`; no Python needed on the host.
+  seed:
+    image: python:3.12-slim
+    depends_on: [greenmail]
+    volumes:
+      - ./seed_mailbox.py:/seed_mailbox.py:ro
+    command: ["python", "/seed_mailbox.py", "--host", "greenmail"]
+    restart: "no"
+
+  roundcube:
+    image: roundcube/roundcubemail:1.6.20-apache
+    depends_on: [greenmail]
+    environment:
+      ROUNDCUBEMAIL_DEFAULT_HOST: greenmail
+      ROUNDCUBEMAIL_DEFAULT_PORT: "3143"
+      ROUNDCUBEMAIL_SMTP_SERVER: greenmail
+      ROUNDCUBEMAIL_SMTP_PORT: "3025"
+    ports:
+      - "127.0.0.1:8000:80"
