@@ -50,15 +50,17 @@ Then configure credentials (see below).
 
 ### Claude Desktop (extension, no setup)
 
-1. Download `imap-slim-<version>.mcpb`.
+1. Download [`releases/mailbox-2.2.0.mcpb`](../releases/mailbox-2.2.0.mcpb).
 2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it.
-3. Fill in server, username and password. Gmail, iCloud and Outlook need an
-   [app password](https://support.google.com/accounts/answer/185833), not the normal one.
+3. Fill in server, username and password. With two-step verification on (Gmail, iCloud, Yahoo)
+   the password is an [app password](https://support.google.com/accounts/answer/185833).
+
+Outlook.com and Microsoft 365 do not work: since September 2024 they accept only OAuth for IMAP.
 
 Claude Desktop installs Python and the dependencies itself. One account only; for several, use
 the config file below with `setup.py`.
 
-Build it: `npx @anthropic-ai/mcpb pack imap-slim` from the repo root (`manifest.json`,
+Build it: `npx @anthropic-ai/mcpb pack imap-slim releases/mailbox-<version>.mcpb` from the repo root (`manifest.json`,
 `.mcpbignore`).
 
 ### Claude Desktop (config file)

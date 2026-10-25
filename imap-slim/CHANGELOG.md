@@ -7,7 +7,9 @@
 - **Claude Desktop extension.** `manifest.json` packs the server into an `.mcpb` with
   `npx @anthropic-ai/mcpb pack imap-slim`. Desktop installs Python and the dependencies (uv
   runtime) and asks for server, port, username, password and an optional From address; they
-  reach the server as `IMAP_SLIM_*` env vars. One account.
+  reach the server as `IMAP_SLIM_*` env vars. One account. Shown in Desktop as "Mailbox"; the
+  built bundle is in `releases/`. Outlook.com and Microsoft 365 are not supported: they require
+  OAuth for IMAP.
 - `IMAP_SLIM_FROM` sets the From address when credentials come from the environment.
 
 ### Fixed
