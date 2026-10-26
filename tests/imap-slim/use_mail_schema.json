@@ -3,19 +3,6 @@
     "MailAction": {
       "description": "Input for use_mail tool - Jesse Vincent style single-tool pattern.",
       "properties": {
-        "account": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Account name for multi-account setups. Use 'accounts' action to list. Default account used if omitted.",
-          "title": "Account"
-        },
         "action": {
           "description": "Action: list|read|search|create|replace|flag|attachment|cleanup|folders|accounts|help",
           "title": "Action",
@@ -34,13 +21,9 @@
           "description": "IMAP folder path or URL (e.g., 'INBOX' or 'imap://x@y/INBOX/Sub')",
           "title": "Folder"
         },
-        "format": {
+        "payload": {
           "anyOf": [
             {
-              "enum": [
-                "markdown",
-                "plain"
-              ],
               "type": "string"
             },
             {
@@ -48,8 +31,8 @@
             }
           ],
           "default": null,
-          "description": "Body format, required for draft. 'markdown': rendered to HTML plus a plain alternative; a newline is a line break, a blank line a paragraph. 'plain': sent exactly as written, no HTML.",
-          "title": "Format"
+          "description": "Action data: read=msg_id[:N|:full|:quote] | search=query | create=JSON{to,subject,body,in_reply_to?,cc?,attachments?:[paths]} | replace=JSON{id,body,subject?,to?,cc?,attachments?} | flag=MSG_ID:+FLAG,-FLAG",
+          "title": "Payload"
         },
         "limit": {
           "anyOf": [
@@ -66,18 +49,19 @@
           "description": "Max results for list/search",
           "title": "Limit"
         },
-        "payload": {
+        "offset": {
           "anyOf": [
             {
-              "type": "string"
+              "minimum": 0,
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "description": "Action data: read=msg_id[:N|:full|:quote] | search=query | create=JSON{to,subject,body,in_reply_to?,cc?,attachments?:[paths]} | replace=JSON{id,body,subject?,to?,cc?,attachments?} | flag=MSG_ID:+FLAG,-FLAG",
-          "title": "Payload"
+          "default": 0,
+          "description": "Skip N newest list/search results (paging)",
+          "title": "Offset"
         },
         "preview": {
           "anyOf": [
@@ -91,6 +75,36 @@
           "default": null,
           "description": "Include body snippet (~100 chars) in list/search results. Required for list and search actions.",
           "title": "Preview"
+        },
+        "account": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Account name for multi-account setups. Use 'accounts' action to list. Default account used if omitted.",
+          "title": "Account"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "enum": [
+                "markdown",
+                "plain"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Body format, required for draft. 'markdown': rendered to HTML plus a plain alternative; a newline is a line break, a blank line a paragraph. 'plain': sent exactly as written, no HTML.",
+          "title": "Format"
         },
         "quote": {
           "anyOf": [

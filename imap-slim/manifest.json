@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "imap-slim",
   "display_name": "Mailbox",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Read, search, flag and draft email over IMAP. Drafts only - nothing is ever sent.",
   "long_description": "Connects Claude to one mailbox. Claude can list, read and search mail, flag messages, save attachments and write drafts (including replies that quote the original). It never sends mail: drafts land in your Drafts folder for you to review and send from your mail program. Does not work with Outlook.com or Microsoft 365: they no longer allow password login for IMAP.",
   "author": {

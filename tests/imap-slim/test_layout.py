@@ -82,3 +82,29 @@ class TestDesktopExtensionManifest:
             assert f"${{user_config.{key}}}" in env
             # An unset optional field without a default is passed through as the literal placeholder.
             assert option.get("required") or "default" in option, key
+
+
+class TestWheelCarriesEveryModule:
+    """only-include lists modules by hand; quoting.py was missing from it, so a
+    non-editable install (uvx, pip) failed on `import actions`."""
+
+    def test_every_local_import_is_packaged(self):
+        import ast
+
+        import tomllib
+
+        pkg = REPO / "imap-slim"
+        config = tomllib.loads((pkg / "pyproject.toml").read_text())
+        packaged = set(config["tool"]["hatch"]["build"]["targets"]["wheel"]["only-include"])
+        local = {p.stem for p in pkg.glob("*.py")}
+
+        needed = set()
+        for name in packaged:
+            for node in ast.walk(ast.parse((pkg / name).read_text())):
+                if isinstance(node, ast.Import):
+                    needed.update(a.name.split(".")[0] for a in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                    needed.add(node.module.split(".")[0])
+
+        missing = {f"{m}.py" for m in needed & local} - packaged
+        assert not missing, f"imported but not in only-include: {sorted(missing)}"

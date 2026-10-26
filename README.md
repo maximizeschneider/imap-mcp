@@ -74,6 +74,10 @@ session until a command runs. Install either, or both.
 
 ## Release Highlights
 
+- **UPDATE** `imap-slim v2.2.0` — Search combines terms (AND, `OR`, `-` negation, phrases) with
+  new fields: recipients, body, relative dates, size, keywords. list and search report the total
+  and page with `offset`. Fixes a packaging bug that broke non-editable installs.
+
 - **UPDATE** `imap-slim v2.1.0` — Replies: the client quotes the original, HTML and inline images
   included, with point-by-point replies for plain text. Available as a skill-backed CLI
   (`imap-slim-cli`) as well as the MCP server; `create`/`replace` named after what IMAP does.

@@ -1,9 +1,19 @@
 """Tests for flag-based search query parsing."""
 
+import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from imap_client import parse_flag_query
+from search_query import parse_search_query
+
+
+def parse_flag_query(query):
+    """The flag criterion a query becomes on its own, or None if it is not a lone flag."""
+    try:
+        criteria = parse_search_query(query, datetime.date.today())
+    except ValueError:
+        return None
+    return criteria[0] if len(criteria) == 1 else None
 
 
 class TestParseFlagQuery:

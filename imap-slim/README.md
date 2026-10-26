@@ -19,7 +19,7 @@ Inspired by [Jesse Vincent's MCP design philosophy](https://blog.fsck.com/2025/1
 
 - **list** - List messages in any folder (`[att:N]` attachment count, `preview` for body snippet)
 - **read** - Read message content with attachments
-- **search** - Search by sender, subject, date, or text (`[att:N]` attachment count, `preview` for body snippet)
+- **search** - Combine sender, recipient, subject, body, date, relative age, size, flags and keywords in one query; `-` negates, `OR` alternates. Reports the total match count and pages with `offset`
 - **create** - Write a new draft (an IMAP `APPEND`), with file attachments. With `quote` it is a
   reply: the client quotes the original, HTML included, and sets the threading
 - **replace** - Supersede an existing draft. IMAP messages are immutable, so this appends the new
@@ -50,7 +50,7 @@ Then configure credentials (see below).
 
 ### Claude Desktop (extension, no setup)
 
-1. Download [`releases/mailbox-2.2.0.mcpb`](../releases/mailbox-2.2.0.mcpb).
+1. Download [`releases/mailbox-2.3.0.mcpb`](../releases/mailbox-2.3.0.mcpb).
 2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it.
 3. Fill in server, username and password. With two-step verification on (Gmail, iCloud, Yahoo)
    the password is an [app password](https://support.google.com/accounts/answer/185833).
@@ -116,9 +116,13 @@ Add to your MCP config:
 "env": {
   "IMAP_SLIM_SERVER": "imap.example.com",
   "IMAP_SLIM_USERNAME": "you@example.com",
-  "IMAP_SLIM_PASSWORD": "app-password"
+  "IMAP_SLIM_PASSWORD": "app-password",
+  "IMAP_SLIM_FROM": "Your Name <you@example.com>"
 }
 ```
+
+`IMAP_SLIM_PORT` defaults to 993. `IMAP_SLIM_FROM` is optional and defaults to the username when
+that is an address. These are read only when the OS keychain holds no accounts.
 
 > `IMAP_STREAM_*` env vars still work for backward compatibility.
 
@@ -201,6 +205,8 @@ mcp-server.json      # MCP config, named explicitly by the marketplace entry.
 {action: "search", folder: "INBOX", payload: "from:boss@company.com", preview: true}
 {action: "search", folder: "INBOX", payload: "subject:urgent", preview: false}
 {action: "search", folder: "INBOX", payload: "since:2024-01-01", preview: true}
+{action: "search", folder: "INBOX", payload: 'from:boss unread newer_than:7d -subject:"weekly digest"', preview: false}
+{action: "search", folder: "INBOX", payload: "from:boss", preview: false, offset: 20}  # next page
 
 # Create draft
 {action: "create", format: "markdown", payload: '{"to":"x@y.com","subject":"Hi","body":"**Hello**"}'}

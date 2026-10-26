@@ -8,7 +8,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-from bodystructure import count_attachments, extract_snippet, find_html_part, find_text_part, get_body_peek
 from imapclient import IMAPClient
 
 # Kept well below any plausible server idle-reaping window. Beyond this a
@@ -76,7 +75,7 @@ def update_cached_flags(account: str, folder: str, message_id: int, new_flags: l
         account: Account name
         folder: Folder containing message
         message_id: Message ID
-        new_flags: New flag list (user format without backslashes)
+        new_flags: New flag list in IMAP form (``\\Seen``, ``$label``)
     """
     with _sessions_lock:
         session = _sessions.get(account)
@@ -158,6 +157,7 @@ class MessageListCache:
     limit: int
     preview: bool
     fetched_at: float
+    total: int = 0
 
 
 @dataclass
@@ -310,25 +310,29 @@ class AccountSession:
         )
         return self.folder_cache.folders
 
-    def get_messages(self, folder: str, limit: int = 20, preview: bool = False) -> list[dict]:
-        """Get message list, validating cache with IMAP metadata.
+    def get_messages(self, folder: str, limit: int = 20, preview: bool = False, offset: int = 0):
+        """Get one page of the message list, validating cache with IMAP metadata.
 
         Args:
             folder: Folder path
             limit: Maximum messages to return
             preview: Include body snippet (~100 chars) per message.
+            offset: Skip this many of the newest messages.
 
         Returns:
-            List of message summaries (newest first)
+            MessagePage, newest first, with ``.total`` the folder's message count.
         """
         with self._lease() as conn:
-            return self._fetch_messages(conn, folder, limit, preview)
+            return self._fetch_messages(conn, folder, limit, preview, offset)
 
-    def _fetch_messages(self, conn: IMAPClient, folder: str, limit: int, preview: bool) -> list[dict]:
-        """Cache-validate and fetch. Caller must hold the lease."""
-        from imap_client import IMAPError, decode_header_value, is_transport_failure
+    def _fetch_messages(self, conn: IMAPClient, folder: str, limit: int, preview: bool, offset: int = 0):
+        """Cache-validate and fetch. Caller must hold the lease.
 
-        # Use select_folder to get atomic state for validation
+        Only the newest page (offset 0) is cached; a later page is served from
+        it when the cached page reaches that far, and fetched otherwise.
+        """
+        from imap_client import IMAPError, MessagePage, fetch_summaries, is_transport_failure, page_ids
+
         try:
             select_res = conn.select_folder(folder, readonly=True)
         except Exception as e:
@@ -336,8 +340,6 @@ class AccountSession:
                 raise
             raise IMAPError(f"Cannot open folder '{folder}': {e}") from e
 
-        # Parse metadata from select response
-        # IMAPClient usually returns dict with keys like b'UIDVALIDITY', b'UIDNEXT', b'EXISTS'
         uidvalidity = select_res.get(b"UIDVALIDITY")
         uidnext = select_res.get(b"UIDNEXT")
         exists = select_res.get(b"EXISTS")
@@ -349,126 +351,28 @@ class AccountSession:
                 and cached.uidvalidity == uidvalidity
                 and cached.uidnext == uidnext
                 and cached.exists == exists
-                and cached.limit >= limit
+                and cached.limit >= offset + limit
                 and cached.preview == preview
                 and time.time() - cached.fetched_at <= MESSAGE_CACHE_TTL
             ):
-                return cached.messages[:limit]
+                return MessagePage(cached.messages[offset : offset + limit], total=cached.total)
 
-        # Cache miss - fetch fresh
-        # Folder is already selected
-        message_ids = conn.search(["ALL"])
+        ids = sorted(conn.search(["ALL"]))
+        messages = fetch_summaries(conn, page_ids(ids, limit, offset), preview)
 
-        if not message_ids:
+        if offset == 0:
             with self.lock:
                 self.message_cache[folder] = MessageListCache(
-                    messages=[],
+                    messages=messages,
                     uidvalidity=uidvalidity,
                     uidnext=uidnext,
                     exists=exists,
                     limit=limit,
                     preview=preview,
                     fetched_at=time.time(),
+                    total=len(ids),
                 )
-            return []
-
-        # Get newest messages
-        selected_ids = message_ids[-limit:] if len(message_ids) > limit else message_ids
-        selected_ids = list(reversed(selected_ids))
-
-        data = conn.fetch(selected_ids, ["ENVELOPE", "FLAGS", "RFC822.SIZE", "BODYSTRUCTURE"])
-
-        snippets: dict[int, str] = {}
-        if preview:
-            try:
-                snippet_info: dict[int, tuple[str, bytes, bytes, bool]] = {}
-                for msg_id in selected_ids:
-                    msg_data = data.get(msg_id)
-                    if not msg_data:
-                        continue
-                    bodystructure = msg_data.get(b"BODYSTRUCTURE")
-                    part = find_text_part(bodystructure)
-                    is_html = False
-                    if part is None:
-                        part = find_html_part(bodystructure)
-                        is_html = part is not None
-                    if part:
-                        section, charset, encoding = part
-                        snippet_info[msg_id] = (section, charset, encoding, is_html)
-
-                snippet_raw: dict[int, dict] = {}
-                section_groups: dict[str, list[int]] = {}
-                for msg_id, (section, _, _, _) in snippet_info.items():
-                    section_groups.setdefault(section, []).append(msg_id)
-
-                for section, group_ids in section_groups.items():
-                    try:
-                        group_data = conn.fetch(group_ids, [f"BODY.PEEK[{section}]<0.600>"])
-                    except Exception as exc:
-                        if is_transport_failure(exc, stage="command"):
-                            raise
-                        continue
-                    for msg_id, payload in group_data.items():
-                        if isinstance(payload, dict):
-                            snippet_raw[msg_id] = payload
-
-                for msg_id, (section, charset, encoding, is_html) in snippet_info.items():
-                    raw = get_body_peek(snippet_raw.get(msg_id, {}), section)
-                    snippets[msg_id] = extract_snippet(raw, charset, encoding, is_html) if raw else ""
-            except Exception as exc:
-                if is_transport_failure(exc, stage="command"):
-                    raise
-                snippets = {}
-
-        messages = []
-        for msg_id in selected_ids:
-            if msg_id not in data:
-                continue
-            msg_data = data[msg_id]
-            envelope = msg_data[b"ENVELOPE"]
-            bodystructure = msg_data.get(b"BODYSTRUCTURE")
-
-            from_addr = ""
-            if envelope.from_:
-                addr = envelope.from_[0]
-                mailbox = _to_str(addr.mailbox)
-                host = _to_str(addr.host)
-                from_addr = f"{mailbox}@{host}"
-
-            date_str = ""
-            if envelope.date:
-                try:
-                    date_str = envelope.date.strftime("%Y-%m-%d %H:%M")
-                except Exception:
-                    date_str = str(envelope.date)
-
-            messages.append(
-                {
-                    "id": msg_id,
-                    # decode_header_value, not _to_str: a subject arrives RFC 2047
-                    # encoded, and both search paths already decode it. Listing a folder
-                    # showed "=?UTF-8?Q?Re=3A_Raportti..." for every non-ASCII subject.
-                    "subject": decode_header_value(envelope.subject) if envelope.subject else "(no subject)",
-                    "from": from_addr,
-                    "date": date_str,
-                    "size": msg_data.get(b"RFC822.SIZE", 0),
-                    "flags": [_to_str(f).lstrip("\\") for f in msg_data.get(b"FLAGS", [])],
-                    "attachment_count": count_attachments(bodystructure) if bodystructure is not None else 0,
-                    "snippet": snippets.get(msg_id, ""),
-                }
-            )
-
-        with self.lock:
-            self.message_cache[folder] = MessageListCache(
-                messages=messages,
-                uidvalidity=uidvalidity,
-                uidnext=uidnext,
-                exists=exists,
-                limit=limit,
-                preview=preview,
-                fetched_at=time.time(),
-            )
-        return messages
+        return MessagePage(messages, total=len(ids))
 
 
 def _to_str(value) -> str:

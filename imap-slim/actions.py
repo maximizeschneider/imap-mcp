@@ -115,6 +115,7 @@ class MailAction(BaseModel):
         description="Action data: read=msg_id[:N|:full|:quote] | search=query | create=JSON{to,subject,body,in_reply_to?,cc?,attachments?:[paths]} | replace=JSON{id,body,subject?,to?,cc?,attachments?} | flag=MSG_ID:+FLAG,-FLAG",
     )
     limit: int | None = Field(default=20, description="Max results for list/search", ge=1, le=100)
+    offset: int | None = Field(default=0, description="Skip N newest list/search results (paging)", ge=0)
     preview: bool | None = Field(
         default=None, description="Include body snippet (~100 chars) in list/search results. Required for list and search actions."
     )
@@ -231,6 +232,7 @@ Output includes `[att:N]` when a message has attachments. Set `preview: true` to
 - folder: Folder path (required)
 - preview: true/false (required) — include body snippet per message
 - limit: Max messages (default 20)
+- offset: Skip this many of the newest (default 0). The header gives the total and the next offset.
 
 ## Examples
 {action: "list", folder: "INBOX", preview: false}
@@ -258,32 +260,35 @@ Full message with: subject, from, to, cc, date, body_text, body_html, message_id
     "search": """
 # search - Search Messages
 
-Search messages in a folder.
-Output includes `[att:N]` when a message has attachments. Set `preview: true` to include `> ...` body snippet (~100 chars).
+Search messages in a folder, newest first. The header gives the total match count and, when
+there are more, the next offset. Output includes `[att:N]` when a message has attachments.
 
 ## Parameters
 - folder: Folder to search
 - payload: Search query
 - preview: true/false (required) — include body snippet per message
 - limit: Max results (default 20)
+- offset: Skip this many of the newest matches (default 0)
 
 ## Query Syntax
-- Simple text: searches subject and body
-- from:address - sender contains
-- subject:text - subject contains
-- since:YYYY-MM-DD - messages after date
-- before:YYYY-MM-DD - messages before date
-- flagged / is:flagged / starred - flagged messages
-- unread / is:unread / unseen - unread messages
-- read / is:read / seen - read messages
-- answered / is:answered - replied messages
-- Negate with :no suffix: flagged:no, seen:no, answered:no
+Terms separated by spaces must all match. Quote a value with spaces: from:"John Smith".
+- word or "a phrase" - subject or body contains it
+- from: to: cc: bcc: subject: body: text: - field contains (text: = headers and body)
+- since:YYYY-MM-DD before:YYYY-MM-DD on:YYYY-MM-DD
+- newer_than:N[dwmy] older_than:N[dwmy] - days, weeks, 30-day months, 365-day years
+- larger:N[k|m] smaller:N[k|m] - size in bytes
+- keyword:NAME (or label:NAME) - IMAP keyword, as set with flag
+- unread read flagged unflagged answered unanswered deleted (also is:unread, seen:no, starred)
+- -term negates: -from:noreply -is:read
+- a OR b - either (uppercase OR); a OR b OR c chains
+- An unknown prefix is plain text: re:budget searches for "re:budget". Quote a flag word to
+  search it as text: "read"
 
 ## Examples
-{action: "search", folder: "INBOX", payload: "project update"}
-{action: "search", folder: "INBOX", payload: "from:client@example.com"}
-{action: "search", folder: "INBOX", payload: "flagged"}
-{action: "search", folder: "INBOX", payload: "is:unread"}
+{action: "search", folder: "INBOX", payload: "project update", preview: false}
+{action: "search", folder: "INBOX", payload: "from:boss unread newer_than:7d", preview: true}
+{action: "search", folder: "INBOX", payload: 'from:alice OR from:bob -subject:"weekly digest"', preview: false}
+{action: "search", folder: "Archive", payload: "larger:5m older_than:1y", preview: false, limit: 50, offset: 50}
 """,
     "create": """
 # create - Write a New Draft
@@ -433,6 +438,45 @@ If no account is specified, the default account is used.
 }
 
 
+def format_page_range(total: int, offset: int, shown: int) -> str:
+    """Which slice of the matches this is, and where the next one starts."""
+    text = f"showing {offset + 1}-{offset + shown} (newest first)"
+    if offset + shown < total:
+        text += f". Next: offset {offset + shown}"
+    return text
+
+
+def _render_rows(messages: list[dict], suspicious: bool) -> tuple[str, bool]:
+    """Render list/search rows inside the untrusted-content boundary.
+
+    Subjects, senders and snippets are written by whoever sent the mail.
+    Sanitizing strips markers but leaves ordinary prose, so the rows go inside
+    the same boundary `read` puts a body in.
+
+    Returns:
+        The wrapped rows, and whether anything suspicious was found so far.
+    """
+    lines = []
+    for msg in messages:
+        attachment_count = msg.get("attachment_count", 0)
+        suffix_parts = [
+            part for part in [format_flags(msg.get("flags", [])), f"[att:{attachment_count}]" if attachment_count > 0 else ""] if part
+        ]
+        safe_subject, subj_flag = sanitize_external_text(msg["subject"])
+        safe_from, from_flag = sanitize_external_text(msg["from"])
+        suspicious = suspicious or subj_flag or from_flag
+        lines.append(f"**[{msg['id']}]** {safe_subject}")
+        suffix = f" {' '.join(suffix_parts)}" if suffix_parts else ""
+        lines.append(f"  From: {safe_from} | {msg['date']}{suffix}")
+        snippet = msg.get("snippet", "")
+        if snippet:
+            safe_snippet, snip_flag = sanitize_external_text(snippet)
+            suspicious = suspicious or snip_flag
+            lines.append(f"  > {safe_snippet}")
+        lines.append("")
+    return wrap_untrusted("\n".join(lines)), suspicious
+
+
 def run_action(params: MailAction) -> str:
     """Dispatch one validated action and return its rendered text.
 
@@ -495,7 +539,8 @@ uv run --directory {plugin_dir} python setup.py
 "env": {{
   "IMAP_SLIM_SERVER": "imap.example.com",
   "IMAP_SLIM_USERNAME": "you@example.com",
-  "IMAP_SLIM_PASSWORD": "app-password"
+  "IMAP_SLIM_PASSWORD": "app-password",
+  "IMAP_SLIM_FROM": "Your Name <you@example.com>"
 }}
 ```"""
 
@@ -523,44 +568,23 @@ uv run --directory {plugin_dir} python setup.py
             if not folder:
                 return Failure("Error: folder required. Example: {action:'list', folder:'INBOX'}")
 
-            messages = list_messages(folder, limit=params.limit, account=params.account, preview=params.preview or False)
+            messages = list_messages(
+                folder, limit=params.limit, account=params.account, preview=params.preview or False, offset=params.offset or 0
+            )
 
-            safe_folder, folder_flag = sanitize_external_text(folder)
-            suspicious_patterns_found = folder_flag
-
+            safe_folder, suspicious = sanitize_external_text(folder)
+            total = getattr(messages, "total", len(messages))
             if not messages:
-                body = f"No messages in '{safe_folder}'"
-                if suspicious_patterns_found:
-                    return POTENTIAL_INJECTION_WARNING + "\n\n" + body
-                return body
-
-            # Subjects, senders and snippets are written by whoever sent the
-            # mail. Sanitizing strips markers but leaves ordinary prose, so the
-            # rows go inside the same boundary `read` puts a body in.
-            lines = []
-            for msg in messages:
-                flag_str = format_flags(msg["flags"])
-                attachment_count = msg.get("attachment_count", 0)
-                att_str = f"[att:{attachment_count}]" if attachment_count > 0 else ""
-                suffix_parts = [part for part in [flag_str, att_str] if part]
-                safe_subject, subj_flag = sanitize_external_text(msg["subject"])
-                safe_from, from_flag = sanitize_external_text(msg["from"])
-                if subj_flag or from_flag:
-                    suspicious_patterns_found = True
-                lines.append(f"**[{msg['id']}]** {safe_subject}")
-                suffix = f" {' '.join(suffix_parts)}" if suffix_parts else ""
-                lines.append(f"  From: {safe_from} | {msg['date']}{suffix}")
-                snippet = msg.get("snippet", "")
-                if snippet:
-                    safe_snippet, snip_flag = sanitize_external_text(snippet)
-                    if snip_flag:
-                        suspicious_patterns_found = True
-                    lines.append(f"  > {safe_snippet}")
-                lines.append("")
-
-            header = f"# Messages in {safe_folder}\nShowing {len(messages)} messages\n\n"
-            body = header + wrap_untrusted("\n".join(lines))
-            if suspicious_patterns_found:
+                body = (
+                    f"No messages in '{safe_folder}'"
+                    if not total
+                    else f"No messages at offset {params.offset} - '{safe_folder}' holds {total}"
+                )
+            else:
+                rows, suspicious = _render_rows(messages, suspicious)
+                header = f"# Messages in {safe_folder}\n{total} message{'' if total == 1 else 's'}, {format_page_range(total, params.offset or 0, len(messages))}\n\n"
+                body = header + rows
+            if suspicious:
                 return POTENTIAL_INJECTION_WARNING + "\n\n" + body
             return body
 
@@ -707,41 +731,28 @@ uv run --directory {plugin_dir} python setup.py
             if not params.payload:
                 return Failure("Error: payload (search query) required. Use 'help search' for syntax.")
 
-            messages = search_messages(folder, params.payload, limit=params.limit, account=params.account, preview=params.preview or False)
+            messages = search_messages(
+                folder,
+                params.payload,
+                limit=params.limit,
+                account=params.account,
+                preview=params.preview or False,
+                offset=params.offset or 0,
+            )
 
             safe_folder, folder_flag = sanitize_external_text(folder)
-            suspicious_patterns_found = folder_flag
-
+            safe_query, query_flag = sanitize_external_text(params.payload)
+            suspicious = folder_flag or query_flag
+            total = getattr(messages, "total", len(messages))
             if not messages:
-                body = f"No messages matching '{params.payload}' in '{safe_folder}'"
-                if suspicious_patterns_found:
-                    return POTENTIAL_INJECTION_WARNING + "\n\n" + body
-                return body
-
-            lines = []
-            for msg in messages:
-                flag_str = format_flags(msg.get("flags", []))
-                attachment_count = msg.get("attachment_count", 0)
-                att_str = f"[att:{attachment_count}]" if attachment_count > 0 else ""
-                suffix_parts = [part for part in [flag_str, att_str] if part]
-                safe_subject, subj_flag = sanitize_external_text(msg["subject"])
-                safe_from, from_flag = sanitize_external_text(msg["from"])
-                if subj_flag or from_flag:
-                    suspicious_patterns_found = True
-                lines.append(f"**[{msg['id']}]** {safe_subject}")
-                suffix = f" {' '.join(suffix_parts)}" if suffix_parts else ""
-                lines.append(f"  From: {safe_from} | {msg['date']}{suffix}")
-                snippet = msg.get("snippet", "")
-                if snippet:
-                    safe_snippet, snip_flag = sanitize_external_text(snippet)
-                    if snip_flag:
-                        suspicious_patterns_found = True
-                    lines.append(f"  > {safe_snippet}")
-                lines.append("")
-
-            header = f"# Search Results: {params.payload}\nFound {len(messages)} in {safe_folder}\n\n"
-            body = header + wrap_untrusted("\n".join(lines))
-            if suspicious_patterns_found:
+                body = f"No messages matching '{safe_query}' in '{safe_folder}'"
+                if total:
+                    body = f"No messages at offset {params.offset} - {total} match '{safe_query}' in '{safe_folder}'"
+            else:
+                rows, suspicious = _render_rows(messages, suspicious)
+                header = f"# Search Results: {safe_query}\nFound {total} in {safe_folder}, {format_page_range(total, params.offset or 0, len(messages))}\n\n"
+                body = header + rows
+            if suspicious:
                 return POTENTIAL_INJECTION_WARNING + "\n\n" + body
             return body
 
@@ -1013,6 +1024,7 @@ This stores your IMAP credentials securely in your system keychain.
 export IMAP_SLIM_SERVER="imap.example.com"
 export IMAP_SLIM_USERNAME="you@example.com"
 export IMAP_SLIM_PASSWORD="app-password"
+export IMAP_SLIM_FROM="Your Name <you@example.com>"  # optional; defaults to the username if it is an address
 ```
 
 After setup, try: `{{action: "folders"}}` to verify connection.

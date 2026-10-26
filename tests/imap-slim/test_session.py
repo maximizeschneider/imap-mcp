@@ -2,6 +2,7 @@
 
 import threading
 import time
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -207,12 +208,12 @@ class TestMessageListCaching:
         mock_client.search.return_value = [1, 2, 3]
         mock_client.fetch.return_value = {
             3: {
-                b"ENVELOPE": Mock(subject=b"Test", from_=[Mock(name=None, mailbox=b"a", host=b"b.com")], date=None),
+                b"ENVELOPE": Mock(subject=b"Test", from_=[SimpleNamespace(name=None, mailbox=b"a", host=b"b.com")], date=None),
                 b"FLAGS": [],
                 b"BODYSTRUCTURE": None,
             },
             2: {
-                b"ENVELOPE": Mock(subject=b"Test2", from_=[Mock(name=None, mailbox=b"c", host=b"d.com")], date=None),
+                b"ENVELOPE": Mock(subject=b"Test2", from_=[SimpleNamespace(name=None, mailbox=b"c", host=b"d.com")], date=None),
                 b"FLAGS": [],
                 b"BODYSTRUCTURE": None,
             },
@@ -257,7 +258,7 @@ class TestMessageListCaching:
             1: {
                 b"ENVELOPE": Mock(
                     subject=b"=?UTF-8?Q?Re=3A_Tarjouspyynt=C3=B6?=",
-                    from_=[Mock(name=None, mailbox=b"a", host=b"b.com")],
+                    from_=[SimpleNamespace(name=None, mailbox=b"a", host=b"b.com")],
                     date=None,
                 ),
                 b"FLAGS": [],
@@ -292,12 +293,12 @@ class TestMessageListCaching:
         mock_client.search.return_value = [1, 2]
         mock_client.fetch.return_value = {
             2: {
-                b"ENVELOPE": Mock(subject=b"New", from_=[Mock(name=None, mailbox=b"a", host=b"b.com")], date=None),
+                b"ENVELOPE": Mock(subject=b"New", from_=[SimpleNamespace(name=None, mailbox=b"a", host=b"b.com")], date=None),
                 b"FLAGS": [],
                 b"BODYSTRUCTURE": None,
             },
             1: {
-                b"ENVELOPE": Mock(subject=b"Old", from_=[Mock(name=None, mailbox=b"a", host=b"b.com")], date=None),
+                b"ENVELOPE": Mock(subject=b"Old", from_=[SimpleNamespace(name=None, mailbox=b"a", host=b"b.com")], date=None),
                 b"FLAGS": [],
                 b"BODYSTRUCTURE": None,
             },

@@ -28,9 +28,9 @@ succeeded, 1 means the action failed and the message is on stderr, 2 means the a
 ## Commands
 
 ```bash
-imap-slim-cli list INBOX [--preview] [--limit 20]
+imap-slim-cli list INBOX [--preview] [--limit 20] [--offset 0]
 imap-slim-cli read INBOX 1253            # 1253:1 for one quoted layer, 1253:full for everything
-imap-slim-cli search INBOX "from:boss@example.com" [--preview]
+imap-slim-cli search INBOX 'from:boss unread newer_than:7d -subject:"digest"' [--preview] [--offset 20]
 imap-slim-cli folders
 imap-slim-cli accounts                   # then pass --account NAME to any command
 imap-slim-cli flag INBOX "1253:+Flagged,-Seen"   # marks only; your mail client does the deleting

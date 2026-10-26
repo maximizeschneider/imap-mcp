@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.3.0] - 2026-10-26
+
+### Added
+
+- **Search combines terms.** Space-separated terms are ANDed; `-term` negates, `a OR b`
+  alternates, `"..."` groups a phrase. New fields: `to: cc: bcc: body: text: on:`,
+  `newer_than:` / `older_than:` (`N[dwmy]`), `larger:` / `smaller:` (`N[k|m]`), `keyword:`.
+  Every term is a plain RFC 3501 search key, so the server does the filtering.
+- **Paging.** `offset` on list and search; the header reports the total and the next offset,
+  e.g. `Found 347 in INBOX, showing 1-20 (newest first). Next: offset 20`.
+
+- `IMAP_SLIM_FROM` sets the draft From address for environment-variable setups.
+
+### Changed
+
+- **An unquoted multi-word value now splits**: `from:John Smith` is sender "John" AND text
+  "Smith". Quote it: `from:"John Smith"`. A bare multi-word query matches each word anywhere in
+  subject or body instead of the exact phrase; quote it for the phrase.
+- list and search render a message the same way: sender with display name, minute-precision
+  date, `(no subject)`.
+
+### Fixed
+
+- list said "1 messages".
+- **`from:alice subject:invoice` searched for a sender containing "alice subject:invoice"** and
+  found nothing. Only the first prefix was parsed.
+- **The wheel left out `quoting.py`**: any non-editable install (uvx, pip) failed on import.
+- **list showed `\Seen` as the keyword `#Seen`** - it stripped the backslash before rendering.
+- **A connection dying while search fetched previews returned empty snippets** instead of
+  reaching the retry; list already re-raised.
+- **A search value with an atom-special, like `subject:(urgent)`, went on the wire unquoted** and
+  the server parsed it as syntax. Such values are now sent as literals.
+
 ## [2.2.0] - 2026-10-25
 
 ### Added

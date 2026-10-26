@@ -26,6 +26,7 @@ import keyring
 from bodystructure import count_attachments, extract_snippet, find_html_part, find_text_part, get_body_peek
 from imapclient import IMAPClient
 from imapclient.exceptions import IMAPClientAbortError
+from search_query import parse_search_query
 
 # Python's default policy folds headers at 78 columns and RFC 2047-encodes any
 # token it cannot fit there - a Message-ID included. An encoded id matches
@@ -154,56 +155,6 @@ def normalize_flag_input(flag: str) -> str:
         # Capitalize standard flags consistently
         return "\\" + clean_lower.capitalize()
     return flag.lstrip("\\")  # Return keyword as-is
-
-
-# Flag query -> IMAP search criterion mapping
-# Liberal parsing: "flagged", "flagged:yes", "is:flagged", "starred" all work
-_FLAG_QUERY_MAP: dict[str, str] = {
-    # Flagged/starred
-    "flagged": "FLAGGED",
-    "flagged:yes": "FLAGGED",
-    "is:flagged": "FLAGGED",
-    "starred": "FLAGGED",
-    "is:starred": "FLAGGED",
-    "unflagged": "UNFLAGGED",
-    "flagged:no": "UNFLAGGED",
-    "is:unflagged": "UNFLAGGED",
-    "unstarred": "UNFLAGGED",
-    # Seen/read
-    "seen": "SEEN",
-    "seen:yes": "SEEN",
-    "read": "SEEN",
-    "is:seen": "SEEN",
-    "is:read": "SEEN",
-    "unseen": "UNSEEN",
-    "seen:no": "UNSEEN",
-    "unread": "UNSEEN",
-    "is:unseen": "UNSEEN",
-    "is:unread": "UNSEEN",
-    # Answered
-    "answered": "ANSWERED",
-    "answered:yes": "ANSWERED",
-    "is:answered": "ANSWERED",
-    "unanswered": "UNANSWERED",
-    "answered:no": "UNANSWERED",
-    "is:unanswered": "UNANSWERED",
-    # Deleted
-    "deleted": "DELETED",
-    "deleted:yes": "DELETED",
-    "is:deleted": "DELETED",
-}
-
-
-def parse_flag_query(query: str) -> str | None:
-    """Parse flag-based search query to IMAP criterion.
-
-    Args:
-        query: User query (e.g., 'flagged', 'is:unread', 'seen:no')
-
-    Returns:
-        IMAP search criterion string or None if not a flag query.
-    """
-    return _FLAG_QUERY_MAP.get(query.lower().strip())
 
 
 class ConnectionFailure(Exception):
@@ -525,22 +476,126 @@ def list_folders(account: str = None) -> list[dict]:
     return session.get_folders()
 
 
-def list_messages(folder: str, limit: int = 20, account: str = None, preview: bool = False) -> list[dict]:
-    """List messages in a folder.
+class MessagePage(list):
+    """One page of message summaries, plus how many messages matched in all.
+
+    A list, so callers that only index or count rows keep working.
+    """
+
+    def __init__(self, items=(), total: int = 0):
+        super().__init__(items)
+        self.total = total
+
+
+def page_ids(ids: list[int], limit: int, offset: int) -> list[int]:
+    """Newest-first page of ascending UIDs: offset 0 is the newest message."""
+    end = max(len(ids) - offset, 0)
+    return list(reversed(ids[max(end - limit, 0) : end]))
+
+
+def _fetch_snippets(client, data: dict, ids: list[int]) -> dict[int, str]:
+    """First ~100 chars of each message's text part, best effort.
+
+    A server refusing a section costs that snippet only. A dead transport is
+    re-raised so the caller's retry gets a fresh connection, rather than
+    returning empty previews from a connection nobody knows is gone.
+    """
+    try:
+        snippet_info: dict[int, tuple[str, bytes, bytes, bool]] = {}
+        for msg_id in ids:
+            bodystructure = data.get(msg_id, {}).get(b"BODYSTRUCTURE")
+            part = find_text_part(bodystructure)
+            is_html = False
+            if part is None:
+                part = find_html_part(bodystructure)
+                is_html = part is not None
+            if part:
+                section, charset, encoding = part
+                snippet_info[msg_id] = (section, charset, encoding, is_html)
+
+        section_groups: dict[str, list[int]] = {}
+        for msg_id, (section, _, _, _) in snippet_info.items():
+            section_groups.setdefault(section, []).append(msg_id)
+
+        snippet_raw: dict[int, dict] = {}
+        for section, group_ids in section_groups.items():
+            try:
+                group_data = client.fetch(group_ids, [f"BODY.PEEK[{section}]<0.600>"])
+            except Exception as exc:
+                if is_transport_failure(exc, stage="command"):
+                    raise
+                continue
+            for msg_id, payload in group_data.items():
+                if isinstance(payload, dict):
+                    snippet_raw[msg_id] = payload
+
+        snippets = {}
+        for msg_id, (section, charset, encoding, is_html) in snippet_info.items():
+            raw = get_body_peek(snippet_raw.get(msg_id, {}), section)
+            snippets[msg_id] = extract_snippet(raw, charset, encoding, is_html) if raw else ""
+        return snippets
+    except Exception as exc:
+        if is_transport_failure(exc, stage="command"):
+            raise
+        return {}
+
+
+def fetch_summaries(client, ids: list[int], preview: bool) -> list[dict]:
+    """Fetch one summary row per id, in the order given.
+
+    The single source of a list/search row, so both render a message the same
+    way: sender with display name, minute-precision date, raw IMAP flags.
+    """
+    if not ids:
+        return []
+    data = client.fetch(ids, ["ENVELOPE", "FLAGS", "RFC822.SIZE", "BODYSTRUCTURE"])
+    snippets = _fetch_snippets(client, data, ids) if preview else {}
+
+    rows = []
+    for msg_id in ids:
+        msg_data = data.get(msg_id)
+        if not msg_data:
+            continue
+        envelope = msg_data[b"ENVELOPE"]
+        bodystructure = msg_data.get(b"BODYSTRUCTURE")
+        date_str = ""
+        if envelope.date:
+            try:
+                date_str = envelope.date.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                date_str = str(envelope.date)
+        rows.append(
+            {
+                "id": msg_id,
+                "subject": decode_header_value(envelope.subject) if envelope.subject else "(no subject)",
+                "from": format_address(envelope.from_[0]) if envelope.from_ else "",
+                "date": date_str,
+                "size": msg_data.get(b"RFC822.SIZE", 0),
+                "flags": [to_str(f) for f in msg_data.get(b"FLAGS", [])],
+                "attachment_count": count_attachments(bodystructure) if bodystructure is not None else 0,
+                "snippet": snippets.get(msg_id, ""),
+            }
+        )
+    return rows
+
+
+def list_messages(folder: str, limit: int = 20, account: str = None, preview: bool = False, offset: int = 0) -> MessagePage:
+    """List messages in a folder, newest first.
 
     Args:
         folder: Folder path (e.g., 'INBOX' or 'INBOX/Subfolder')
-        limit: Maximum messages to return (newest first)
+        limit: Maximum messages to return
         account: Account name. None uses default.
         preview: Include body snippet (~100 chars) per message.
+        offset: Skip this many of the newest messages.
 
     Returns:
-        List of message summaries
+        One page of summaries; ``.total`` is the folder's message count.
     """
     from session import get_session
 
     session = get_session(account)
-    return session.get_messages(folder, limit, preview=preview)
+    return session.get_messages(folder, limit, preview=preview, offset=offset)
 
 
 def _is_quote_line(line: str) -> bool:
@@ -968,40 +1023,30 @@ def cleanup_attachments() -> dict:
     return {"deleted": deleted, "freed_bytes": freed_bytes}
 
 
-def _parse_search_date(value: str, keyword: str) -> datetime.date:
-    """Turn a YYYY-MM-DD search term into a date.
-
-    IMAP dates are `1-Jan-2024` (RFC 3501 §9); a bare string is passed through
-    verbatim and the server rejects it. IMAPClient serialises a date object
-    into the wire form itself.
-    """
-    try:
-        return datetime.datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        raise IMAPError(f"'{keyword}:' needs a date as YYYY-MM-DD, got '{value}'") from None
-
-
-def search_messages(folder: str, query: str, limit: int = 20, account: str = None, preview: bool = False) -> list[dict]:
-    """Search messages in a folder.
+def search_messages(folder: str, query: str, limit: int = 20, account: str = None, preview: bool = False, offset: int = 0) -> MessagePage:
+    """Search messages in a folder, newest first.
 
     Args:
         folder: Folder path
-        query: Search query. Supports:
-            - Simple text: searches subject and body
-            - from:address
-            - subject:text
-            - since:YYYY-MM-DD
-            - before:YYYY-MM-DD
-            - Flag queries: flagged, unread, seen, answered, deleted
-              Also: is:flagged, flagged:yes, flagged:no, starred, etc.
+        query: Search query, see search_query.parse_search_query.
         limit: Maximum results
         account: Account name. None uses default.
         preview: Include body snippet (~100 chars) per message.
+        offset: Skip this many of the newest matches.
 
     Returns:
-        List of matching message summaries with id, subject, from, date, flags.
+        One page of summaries; ``.total`` is the number of matches.
     """
     from session import get_session
+
+    try:
+        criteria = parse_search_query(query, datetime.date.today())
+    except ValueError as e:
+        raise IMAPError(f"{e}. See {{action:'help', payload:'search'}} for the syntax") from None
+
+    # A search term outside ASCII has to name its charset; without one the
+    # client encodes as ASCII and raises before anything reaches the server.
+    charset = "UTF-8" if any(isinstance(c, str) and not c.isascii() for c in criteria) else None
 
     session = get_session(account)
 
@@ -1013,30 +1058,6 @@ def search_messages(folder: str, query: str, limit: int = 20, account: str = Non
                 raise
             raise IMAPError(f"Cannot open folder '{folder}': {e}") from e
 
-        # Build IMAP search criteria
-        query_lower = query.lower().strip()
-
-        # Try flag-based query first
-        flag_criterion = parse_flag_query(query)
-        if flag_criterion:
-            criteria = [flag_criterion]
-        elif query_lower.startswith("from:"):
-            criteria = ["FROM", query[5:].strip()]
-        elif query_lower.startswith("subject:"):
-            criteria = ["SUBJECT", query[8:].strip()]
-        elif query_lower.startswith("since:"):
-            criteria = ["SINCE", _parse_search_date(query[6:].strip(), "since")]
-        elif query_lower.startswith("before:"):
-            criteria = ["BEFORE", _parse_search_date(query[7:].strip(), "before")]
-        else:
-            # General text search - search subject OR body
-            criteria = ["OR", "SUBJECT", query, "BODY", query]
-
-        # A search term outside ASCII has to name its charset; without one the
-        # client encodes as ASCII and raises before anything reaches the server.
-        charset = "UTF-8" if any(isinstance(c, str) and not c.isascii() for c in criteria) else None
-
-        # Execute search
         try:
             message_ids = client.search(criteria, charset=charset)
         except Exception as e:
@@ -1049,73 +1070,8 @@ def search_messages(folder: str, query: str, limit: int = 20, account: str = Non
                 ) from e
             raise IMAPError(f"Search failed: {e}") from e
 
-        if not message_ids:
-            return []
-
-        # Get newest matches
-        selected_ids = message_ids[-limit:] if len(message_ids) > limit else message_ids
-        selected_ids = list(reversed(selected_ids))
-
-        # Fetch summaries
-        messages = client.fetch(selected_ids, ["ENVELOPE", "FLAGS", "BODYSTRUCTURE"])
-
-        snippets: dict[int, str] = {}
-        if preview:
-            try:
-                snippet_info: dict[int, tuple[str, bytes, bytes, bool]] = {}
-                for msg_id in selected_ids:
-                    msg_data = messages.get(msg_id)
-                    if not msg_data:
-                        continue
-                    bodystructure = msg_data.get(b"BODYSTRUCTURE")
-                    part = find_text_part(bodystructure)
-                    is_html = False
-                    if part is None:
-                        part = find_html_part(bodystructure)
-                        is_html = part is not None
-                    if part:
-                        section, charset, encoding = part
-                        snippet_info[msg_id] = (section, charset, encoding, is_html)
-
-                snippet_raw: dict[int, dict] = {}
-                section_groups: dict[str, list[int]] = {}
-                for msg_id, (section, _, _, _) in snippet_info.items():
-                    section_groups.setdefault(section, []).append(msg_id)
-
-                for section, group_ids in section_groups.items():
-                    try:
-                        group_data = client.fetch(group_ids, [f"BODY.PEEK[{section}]<0.600>"])
-                    except Exception:
-                        continue
-                    for msg_id, payload in group_data.items():
-                        if isinstance(payload, dict):
-                            snippet_raw[msg_id] = payload
-
-                for msg_id, (section, charset, encoding, is_html) in snippet_info.items():
-                    raw = get_body_peek(snippet_raw.get(msg_id, {}), section)
-                    snippets[msg_id] = extract_snippet(raw, charset, encoding, is_html) if raw else ""
-            except Exception:
-                snippets = {}
-
-        results = []
-        for msg_id, data in messages.items():
-            envelope = data[b"ENVELOPE"]
-            from_addr = format_address(envelope.from_[0]) if envelope.from_ else ""
-
-            flags = [f.decode() if isinstance(f, bytes) else str(f) for f in data.get(b"FLAGS", [])]
-            results.append(
-                {
-                    "id": msg_id,
-                    "subject": decode_header_value(envelope.subject) if envelope.subject else "",
-                    "from": from_addr,
-                    "date": str(envelope.date) if envelope.date else "",
-                    "flags": flags,
-                    "attachment_count": count_attachments(data.get(b"BODYSTRUCTURE")),
-                    "snippet": snippets.get(msg_id, ""),
-                }
-            )
-
-        return results
+        ids = sorted(message_ids)
+        return MessagePage(fetch_summaries(client, page_ids(ids, limit, offset), preview), total=len(ids))
 
     # Read-only: safe to retry once if the transport dies mid-command.
     return session.run_op(_operation, retry=True)
@@ -1853,7 +1809,7 @@ def modify_flags(folder: str, message_ids: list[int], add_flags: list[str], remo
                 try:
                     msg_data = client.fetch([msg_id], ["FLAGS"])
                     if msg_id in msg_data:
-                        current_flags = [normalize_flag_output(to_str(f)) for f in msg_data[msg_id].get(b"FLAGS", [])]
+                        current_flags = [to_str(f) for f in msg_data[msg_id].get(b"FLAGS", [])]
                         from session import update_cached_flags
 
                         update_cached_flags(session.account, folder, msg_id, current_flags)

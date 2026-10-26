@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("folder")
     p.add_argument("--preview", action="store_true", help="include a body snippet per message")
     p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--offset", type=int, default=0, help="skip this many of the newest results")
     _add_account(p)
 
     p = sub.add_parser("read", help="read one message")
@@ -57,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("query")
     p.add_argument("--preview", action="store_true")
     p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--offset", type=int, default=0, help="skip this many of the newest results")
     _add_account(p)
 
     p = sub.add_parser("create", help="write a new draft to Drafts")
@@ -106,6 +108,7 @@ def to_action(args: argparse.Namespace) -> MailAction:
     if args.command in {"list", "search"}:
         fields["folder"] = args.folder
         fields["limit"] = args.limit
+        fields["offset"] = args.offset
         # The model requires an explicit choice; absence of the flag is False,
         # never "unspecified".
         fields["preview"] = bool(args.preview)

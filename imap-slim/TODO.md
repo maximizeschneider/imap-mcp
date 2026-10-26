@@ -3,7 +3,7 @@
 ## Future Ideas
 
 - [x] Cache - Folder listing/message caching (v0.4.0)
-- [ ] Search operators - Complex criteria (AND/OR)
+- [x] Search operators - AND, OR, negation, phrases, more fields; total + offset paging (v2.2.0)
 - [x] Flag-based search - is:flagged, unread, seen, answered (v0.4.1)
 - [x] Flag management - Mark as read/important (v0.3.0)
 - [ ] Safe Moving messages from folder to another
