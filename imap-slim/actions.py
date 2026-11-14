@@ -15,6 +15,7 @@ from typing import Literal
 
 import html2text
 from imap_client import (
+    PANEL_HINT,
     IMAPError,
     cleanup_attachments,
     create_draft,
@@ -28,6 +29,7 @@ from imap_client import (
     list_messages,
     modify_draft,
     modify_flags,
+    panel_enabled,
     parse_folder_path,
     read_message,
     search_messages,
@@ -524,6 +526,9 @@ def run_action(params: MailAction) -> str:
 
             if not accounts and (login := env_login()):
                 accounts, default = [login], login
+
+            if not accounts and panel_enabled():
+                return f"# No Accounts Configured\n\n{PANEL_HINT}"
 
             if not accounts:
                 plugin_dir = Path(__file__).parent.resolve()

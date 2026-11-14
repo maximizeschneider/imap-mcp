@@ -50,15 +50,23 @@ Then configure credentials (see below).
 
 ### Claude Desktop (extension, no setup)
 
-1. Download [`releases/mailbox-2.3.0.mcpb`](../releases/mailbox-2.3.0.mcpb).
-2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it.
-3. Fill in server, username and password. With two-step verification on (Gmail, iCloud, Yahoo)
-   the password is an [app password](https://support.google.com/accounts/answer/185833).
+1. Download [`releases/mailbox-2.4.0.mcpb`](../releases/mailbox-2.4.0.mcpb).
+2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it. Server and port
+   are preset (`192.168.0.110`, `993`); change them only if your IT says so.
+3. Ask Claude to manage mailboxes. A panel opens in the chat: add each mailbox with its address,
+   username and password, change a password, or remove a mailbox. With two-step verification on
+   (Gmail, iCloud, Yahoo) the password is an [app password](https://support.google.com/accounts/answer/185833).
+
+Passwords go from the panel to the system keychain; the panel's tools are hidden from the model,
+so Claude never sees them and cannot remove a mailbox on its own. All mailboxes share the server
+from the extension settings. Uninstalling leaves the keychain entries in place: use "Alle
+Postfächer entfernen" in the panel first.
 
 Outlook.com and Microsoft 365 do not work: since September 2024 they accept only OAuth for IMAP.
 
-Claude Desktop installs Python and the dependencies itself. One account only; for several, use
-the config file below with `setup.py`.
+Claude Desktop installs Python and the dependencies itself. The panel uses
+[MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (bridge vendored in `vendor/`, inlined
+when the panel is served) and exists only in the extension (`IMAP_SLIM_MAILBOX_PANEL=1`).
 
 Build it: `npx @anthropic-ai/mcpb pack imap-slim releases/mailbox-<version>.mcpb` from the repo root (`manifest.json`,
 `.mcpbignore`).
@@ -252,6 +260,8 @@ mcp-server.json      # MCP config, named explicitly by the marketplace entry.
 
 ## Release Highlights
 
+- **v2.4.0** — Desktop extension manages any number of mailboxes in an in-chat panel; install
+  asks nothing.
 - **v2.2.0** — Claude Desktop extension (`.mcpb`): install by drag and drop, credentials in a
   form. Attachment path guard fixed on Windows.
 - **v2.1.0** — Replies: the client quotes the original, HTML and inline images included, with

@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.4.0] - 2026-10-27
+
+### Added
+
+- **Mailbox panel in the Desktop extension.** `manage_mailboxes` opens an MCP Apps panel in the
+  chat to add mailboxes (address, username, password), change a login, remove one or remove all.
+  The editing tools are app-only: Claude Desktop hides them from the model, so passwords never
+  reach the conversation and removal takes a click. Registered only when
+  `IMAP_SLIM_MAILBOX_PANEL=1`, which only the extension sets.
+- `mailboxes.py`: the single keychain writer, used by the panel and `setup.py`.
+
+### Changed
+
+- **Extension install asks nothing.** Server and port are optional with defaults
+  `192.168.0.110` / `993`; username, password and From left the form. A 2.2.0/2.3.0 extension
+  user re-adds the mailbox in the panel after updating.
+- Keychain accounts without a stored server or port use `IMAP_SLIM_SERVER` / `IMAP_SLIM_PORT`,
+  so a server change in the extension settings reaches every panel mailbox.
+- "Not configured" errors in the extension point to `manage_mailboxes` instead of `setup.py`.
+
 ## [2.3.0] - 2026-10-26
 
 ### Added

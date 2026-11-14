@@ -219,6 +219,21 @@ class IMAPError(Exception):
     pass
 
 
+def _env(name: str) -> str | None:
+    """IMAP_SLIM_<name>, or the pre-rename IMAP_STREAM_<name>."""
+    return os.environ.get(f"IMAP_SLIM_{name}") or os.environ.get(f"IMAP_STREAM_{name}") or None
+
+
+PANEL_HINT = (
+    "No mailbox set up. Call the manage_mailboxes tool: it opens a panel where the user adds mailboxes. Never ask for passwords in chat."
+)
+
+
+def panel_enabled() -> bool:
+    """Whether this server runs as the Desktop extension with the mailbox panel."""
+    return os.environ.get("IMAP_SLIM_MAILBOX_PANEL") == "1"
+
+
 def get_credentials(account: str | None = None) -> tuple[str, str, str, str]:
     """Fetch IMAP credentials from keychain or environment.
 
@@ -243,24 +258,30 @@ def get_credentials(account: str | None = None) -> tuple[str, str, str, str]:
         if account not in accounts:
             raise IMAPError(f"Account '{account}' not found. Available: {', '.join(accounts)}")
 
-        server = _keyring_get(f"{account}:imap_server")
-        port = _keyring_get(f"{account}:imap_port")
+        # Mailboxes added in the Desktop panel store no server: they share the
+        # one set in the extension settings, so changing it there reaches all.
+        server = _keyring_get(f"{account}:imap_server") or _env("SERVER")
+        port = _keyring_get(f"{account}:imap_port") or _env("PORT")
         username = _keyring_get(f"{account}:imap_username")
         password = _keyring_get(f"{account}:imap_password")
 
-        if not all([server, username, password]):
+        if not server:
+            raise IMAPError(
+                f"Account '{account}' has no server stored and IMAP_SLIM_SERVER is unset."
+                + (" Set the server in the extension settings." if panel_enabled() else "")
+            )
+        if not all([username, password]):
             raise IMAPError(f"Account '{account}' credentials incomplete.")
 
         return server, port or "993", username, password
 
     # Fallback: Environment variables (automation/Docker)
     # IMAP_SLIM_* preferred, IMAP_STREAM_* accepted for backward compat
-    server = os.environ.get("IMAP_SLIM_SERVER") or os.environ.get("IMAP_STREAM_SERVER")
-    port = os.environ.get("IMAP_SLIM_PORT") or os.environ.get("IMAP_STREAM_PORT")
-    username = os.environ.get("IMAP_SLIM_USERNAME") or os.environ.get("IMAP_STREAM_USERNAME")
-    password = os.environ.get("IMAP_SLIM_PASSWORD") or os.environ.get("IMAP_STREAM_PASSWORD")
+    server, port, username, password = _env("SERVER"), _env("PORT"), _env("USERNAME"), _env("PASSWORD")
 
     if not all([server, username, password]):
+        if panel_enabled():
+            raise IMAPError(PANEL_HINT)
         raise IMAPError("IMAP not configured. Run 'uv run python setup.py' to configure, or set IMAP_SLIM_* environment variables.")
 
     return server, port or "993", username, password
@@ -268,9 +289,9 @@ def get_credentials(account: str | None = None) -> tuple[str, str, str, str]:
 
 def env_login() -> str | None:
     """Login of the single account configured by environment variables, if any."""
-    if not (os.environ.get("IMAP_SLIM_SERVER") or os.environ.get("IMAP_STREAM_SERVER")):
+    if not _env("SERVER"):
         return None
-    return os.environ.get("IMAP_SLIM_USERNAME") or os.environ.get("IMAP_STREAM_USERNAME") or None
+    return _env("USERNAME")
 
 
 def get_from_address(account: str | None = None) -> str:

@@ -1,0 +1,4 @@
+panel.html
+.venv/
+uv.lock
+*.mcpb

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mailbox-Test</title>
+<style>
+  :root { --bg: #fff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #ddd; --accent: #2f6fde; --bad: #c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1f1f1f; --fg: #eee; --muted: #a0a0a0; --line: #3a3a3a; --accent: #7aa7ff; --bad: #ff7b6b; } }
+  body { margin: 0; padding: 16px; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 18px 0 6px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .row span { flex: 1; }
+  input { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+  button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--accent); cursor: pointer; }
+  #log { margin-top: 14px; white-space: pre-wrap; font: 12px ui-monospace, monospace; color: var(--muted); }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<h1>Mailbox-Test (Versuch)</h1>
+<div class="muted" id="status">Verbinde …</div>
+
+<h2>1. Testwert speichern</h2>
+<div class="muted">Kein echtes Passwort eingeben! Nimm z. B. KANARIE-4711.</div>
+<div class="row"><input id="value" type="password" autocomplete="off" placeholder="Testwert"><button id="save">Speichern</button></div>
+
+<h2>2. Einträge entfernen</h2>
+<div id="items"></div>
+
+<div id="log"></div>
+
+<script type="module">
+/*__BUNDLE__*/
+</script>
+<script type="module">
+const { App } = window.McpApps;
+const $ = (id) => document.getElementById(id);
+const log = (msg, err) => { const d = document.createElement("div"); d.textContent = msg; if (err) d.className = "err"; $("log").prepend(d); };
+const text = (r) => (r.content || []).map((c) => c.text || "").join(" ");
+
+const app = new App({ name: "mailbox-spike-panel", version: "0.1.0" }, {});
+
+async function call(name, args = {}) {
+  try {
+    const r = await app.callServerTool({ name, arguments: args });
+    if (r.isError) { log(`${name}: Fehler – ${text(r)}`, true); return null; }
+    return r;
+  } catch (e) { log(`${name}: ${e.message || e}`, true); return null; }
+}
+
+async function refresh() {
+  const r = await call("list_items");
+  if (!r) return;
+  const items = r.structuredContent?.result ?? (r.content || []).map((c) => c.text).filter(Boolean);
+  const box = $("items"); box.replaceChildren();
+  if (!items.length) { box.textContent = "Keine Einträge."; return; }
+  for (const item of items) {
+    const row = document.createElement("div"); row.className = "row";
+    const s = document.createElement("span"); s.textContent = item;
+    const b = document.createElement("button"); b.textContent = "Entfernen";
+    b.onclick = async () => { const res = await call("remove_item", { item }); if (res) { log(text(res)); refresh(); } };
+    row.append(s, b); box.append(row);
+  }
+}
+
+$("save").onclick = async () => {
+  const v = $("value").value;
+  if (!v) return;
+  const r = await call("store_value", { value: v });
+  if (r) { log(text(r)); $("value").value = ""; }
+};
+
+try {
+  await app.connect();
+  const host = app.getHostVersion?.();
+  $("status").textContent = `Verbunden${host ? ` mit ${host.name} ${host.version}` : ""}.`;
+  refresh();
+} catch (e) {
+  $("status").textContent = `Verbindung fehlgeschlagen: ${e.message || e}`;
+  $("status").className = "err";
+}
+</script>
+</body>
+</html>

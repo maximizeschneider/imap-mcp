@@ -19,6 +19,8 @@ Usage with Claude Desktop/Code:
 """
 
 import actions
+import imap_client
+import mailbox_panel
 from actions import HELP_TOPICS, MailAction  # noqa: F401  re-exported for existing importers
 from mcp.server.fastmcp import FastMCP
 
@@ -56,6 +58,10 @@ async def use_mail(params: MailAction) -> str:
       {action:"help", payload:"search"} - help on topic
     """
     return actions.run_action(params)
+
+
+if imap_client.panel_enabled():
+    mailbox_panel.register(mcp)
 
 
 def main():

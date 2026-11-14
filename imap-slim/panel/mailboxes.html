@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Postfächer</title>
+<style>
+  :root { --bg: #fff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #ddd; --accent: #2f6fde; --bad: #c0392b; --ok: #2e7d32; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1f1f1f; --fg: #eee; --muted: #a0a0a0; --line: #3a3a3a; --accent: #7aa7ff; --bad: #ff7b6b; --ok: #81c784; } }
+  :root[data-theme="dark"] { --bg: #1f1f1f; --fg: #eee; --muted: #a0a0a0; --line: #3a3a3a; --accent: #7aa7ff; --bad: #ff7b6b; --ok: #81c784; }
+  body { margin: 0; padding: 16px; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  h2 { font-size: 14px; margin: 20px 0 6px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .grow { flex: 1; min-width: 160px; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+  form { display: grid; gap: 8px; max-width: 420px; }
+  label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+  input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
+  button { padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  .edit { flex-basis: 100%; }
+  #msg { min-height: 1.4em; margin-top: 12px; }
+  #msg.err { color: var(--bad); }
+  #msg.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<h1>Postfächer</h1>
+<div class="muted" id="server">Lade …</div>
+
+<div id="list"></div>
+
+<h2>Postfach hinzufügen</h2>
+<form id="add" autocomplete="off">
+  <label>Mailadresse <input name="address" type="email" required placeholder="projekt@firma.de"></label>
+  <label>Benutzername <input name="username" required></label>
+  <label>Passwort <input name="password" type="password" required></label>
+  <div><button type="submit">Hinzufügen</button></div>
+</form>
+<div class="muted">Die Zugangsdaten werden im Schlüsselbund dieses Computers gespeichert. Claude bekommt das Passwort nicht zu sehen.</div>
+
+<div id="msg" role="status"></div>
+
+<h2>Alle entfernen</h2>
+<div class="muted">Vor dem Deinstallieren der Erweiterung: Das Deinstallieren allein löscht die gespeicherten Zugangsdaten nicht. Entfernt alle hier gelisteten Postfächer dieses Computers.</div>
+<div class="row" id="clear"></div>
+
+<script type="module">
+/*__EXT_APPS__*/
+</script>
+<script type="module">
+const { App } = window.McpApps;
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+const text = (r) => (r.content || []).map((c) => c.text || "").join(" ");
+
+function say(msg, kind = "ok") { $("msg").textContent = msg; $("msg").className = kind; }
+
+const app = new App({ name: "imap-slim-mailboxes", version: "1" }, {});
+
+async function call(name, args = {}) {
+  try {
+    const r = await app.callServerTool({ name, arguments: args });
+    if (r.isError) { say(text(r) || "Fehler", "err"); return null; }
+    return r;
+  } catch (e) { say(String(e.message || e), "err"); return null; }
+}
+
+// Two clicks for anything destructive: the sandboxed panel cannot open confirm().
+function confirmButton(label, question, onConfirm) {
+  const box = el("span");
+  const reset = () => box.replaceChildren(el("button", { className: "danger", textContent: label, type: "button", onclick: ask }));
+  function ask() {
+    box.replaceChildren(
+      el("span", { textContent: question + " " }),
+      el("button", { className: "danger", textContent: "Ja", type: "button", onclick: async () => { await onConfirm(); reset(); } }),
+      " ",
+      el("button", { textContent: "Abbrechen", type: "button", onclick: reset }),
+    );
+  }
+  reset();
+  return box;
+}
+
+function editForm(mb, row) {
+  const user = el("input", { value: mb.username, required: true });
+  const pass = el("input", { type: "password", placeholder: "leer lassen = unverändert" });
+  const form = el("form", { className: "edit", autocomplete: "off" },
+    el("label", {}, "Benutzername", user),
+    el("label", {}, "Neues Passwort", pass),
+    el("div", {}, el("button", { type: "submit", textContent: "Speichern" }), " ", el("button", { type: "button", textContent: "Abbrechen", onclick: () => form.remove() })),
+  );
+  form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const r = await call("mailbox_save", { address: mb.address, username: user.value, password: pass.value });
+    if (r) { say(text(r)); refresh(); }
+  };
+  row.append(form);
+  user.focus();
+}
+
+async function refresh() {
+  const r = await call("mailbox_list");
+  if (!r) return;
+  const { server, mailboxes } = r.structuredContent ?? JSON.parse(text(r));
+  $("server").textContent = server ? `Server: ${server}` : "Kein Server eingestellt – bitte in den Einstellungen der Erweiterung eintragen.";
+  const list = $("list");
+  list.replaceChildren();
+  if (!mailboxes.length) list.append(el("div", { className: "row muted", textContent: "Noch kein Postfach eingerichtet." }));
+  for (const mb of mailboxes) {
+    const row = el("div", { className: "row" });
+    const name = el("span", { className: "grow" }, el("span", { textContent: mb.address }));
+    if (mb.default) name.append(el("span", { className: "tag", textContent: "Standard" }));
+    name.append(el("div", { className: "muted", textContent: `Benutzername: ${mb.username}` + (mb.server ? ` · Server: ${mb.server}` : "") }));
+    row.append(
+      name,
+      el("button", { type: "button", textContent: "Ändern", onclick: () => row.querySelector("form") || editForm(mb, row) }),
+      confirmButton("Entfernen", `${mb.address} entfernen?`, async () => {
+        const res = await call("mailbox_remove", { address: mb.address });
+        if (res) { say(text(res)); refresh(); }
+      }),
+    );
+    list.append(row);
+  }
+  $("clear").replaceChildren(mailboxes.length
+    ? confirmButton("Alle Postfächer entfernen", "Wirklich alle entfernen?", async () => {
+        const res = await call("mailbox_remove_all");
+        if (res) { say(text(res)); refresh(); }
+      })
+    : el("span", { className: "muted", textContent: "Keine gespeicherten Zugangsdaten." }));
+}
+
+$("add").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const btn = f.querySelector("button"); btn.disabled = true;
+  const r = await call("mailbox_save", { address: f.address.value, username: f.username.value, password: f.password.value });
+  btn.disabled = false;
+  if (r) { say(text(r)); f.reset(); refresh(); }
+};
+
+try {
+  await app.connect();
+  const theme = app.getHostContext?.()?.theme;
+  if (theme) document.documentElement.dataset.theme = theme;
+  refresh();
+} catch (e) {
+  $("server").textContent = `Verbindung zu Claude fehlgeschlagen: ${e.message || e}`;
+}
+</script>
+</body>
+</html>

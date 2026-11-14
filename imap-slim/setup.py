@@ -19,6 +19,7 @@ import json
 import sys
 
 import keyring
+import mailboxes
 from imap_client import SERVICE_NAME, _keyring_get
 
 
@@ -145,18 +146,7 @@ def collect_account_settings(name: str, existing: bool = False) -> tuple[str, st
 
 def save_account_credentials(name: str, server: str, port: str, username: str, password: str, from_address: str | None = None):
     """Save account credentials to keychain."""
-    accounts = get_accounts()
-
-    keyring.set_password(SERVICE_NAME, f"{name}:imap_server", server)
-    keyring.set_password(SERVICE_NAME, f"{name}:imap_port", port)
-    keyring.set_password(SERVICE_NAME, f"{name}:imap_username", username)
-    keyring.set_password(SERVICE_NAME, f"{name}:imap_password", password)
-    if from_address:
-        keyring.set_password(SERVICE_NAME, f"{name}:from_address", from_address)
-
-    if name not in accounts:
-        accounts.append(name)
-        save_accounts(accounts)
+    mailboxes.save(name, username, password, server=server, port=port, from_address=from_address)
 
 
 def rename_account(old: str, new: str):
@@ -250,18 +240,10 @@ def remove_account(name: str):
         print(f"Error: Account '{name}' not found.")
         sys.exit(1)
 
-    for key in ["imap_server", "imap_port", "imap_username", "imap_password", "from_address"]:
-        try:
-            keyring.delete_password(SERVICE_NAME, f"{name}:{key}")
-        except keyring.errors.PasswordDeleteError:
-            pass
-
-    accounts.remove(name)
-    save_accounts(accounts)
-
-    default = get_default_account()
-    if default == name and accounts:
-        keyring.set_password(SERVICE_NAME, "default_account", accounts[0])
+    was_default = get_default_account() == name
+    mailboxes.remove(name)
+    accounts = get_accounts()
+    if was_default and accounts:
         print(f"New default account: {accounts[0]}")
 
     print(f"Account '{name}' removed.")
@@ -287,23 +269,8 @@ def list_accounts():
 
 def clear_all():
     """Remove all configuration."""
-    accounts = get_accounts()
-
     print("Removing all stored credentials...")
-
-    for acc in accounts:
-        for key in ["imap_server", "imap_port", "imap_username", "imap_password", "from_address"]:
-            try:
-                keyring.delete_password(SERVICE_NAME, f"{acc}:{key}")
-            except keyring.errors.PasswordDeleteError:
-                pass
-
-    for key in ["accounts", "default_account"]:
-        try:
-            keyring.delete_password(SERVICE_NAME, key)
-        except keyring.errors.PasswordDeleteError:
-            pass
-
+    mailboxes.remove_all()
     print("All credentials removed.")
 
 

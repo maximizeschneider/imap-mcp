@@ -1,6 +1,6 @@
 [project]
 name = "imap-slim-mcp"
-version = "2.3.0"
+version = "2.4.0"
 description = "Lightweight IMAP MCP server for Claude"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,6 +37,10 @@ only-include = [
     "quoting.py",
     "search_query.py",
     "imapctl.py",
+    "mailboxes.py",
+    "mailbox_panel.py",
+    "panel",
+    "vendor",
 ]
 
 [dependency-groups]

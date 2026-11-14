@@ -23,6 +23,10 @@
 - [x] Connection recovery: discard rather than interrogate a dead socket (v2.0.0)
 - [x] Skill-backed CLI alongside the MCP (v2.0.0)
 - [x] Action names match IMAP: create / replace, no edit (v2.0.0)
+- [x] Mailbox panel in the Desktop extension (v2.4.0) - `docs/imap-slim/plans/2026-10-27-mailbox-panel.md`
+- [ ] Mailbox panel verified on Windows (only macOS tested)
+- [ ] Office server 192.168.0.110: IMAP not reachable from clients; once enabled, pin its certificate if self-signed
+- [ ] Removed mailbox: a cached connection in another server process lives up to CONNECTION_MAX_IDLE (60 s)
 - [ ] Inline spans crossing a newline: `**bold\ncontinued**` stays literal in the plain part while
       the HTML renders it. Known divergence, no decision to fix
 - [x] Attachments and cleanup exercised against a real server (2026-09-07)

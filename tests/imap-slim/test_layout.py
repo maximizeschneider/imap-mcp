@@ -99,7 +99,8 @@ class TestWheelCarriesEveryModule:
         local = {p.stem for p in pkg.glob("*.py")}
 
         needed = set()
-        for name in packaged:
+        # Non-module entries (the mailbox panel's HTML and vendored JS directories) carry no imports.
+        for name in (n for n in packaged if n.endswith(".py")):
             for node in ast.walk(ast.parse((pkg / name).read_text())):
                 if isinstance(node, ast.Import):
                     needed.update(a.name.split(".")[0] for a in node.names)
