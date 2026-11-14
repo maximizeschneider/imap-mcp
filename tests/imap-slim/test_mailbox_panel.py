@@ -106,7 +106,7 @@ class TestTools:
     async def test_save_errors_reach_the_panel(self, server):
         from mcp.server.fastmcp.exceptions import ToolError
 
-        with pytest.raises(ToolError, match="Passwort fehlt"):
+        with pytest.raises(ToolError, match="Passwort ein"):
             await call(server, "mailbox_save", {"address": "p1@firma.de", "username": "p1", "password": ""})
 
     async def test_remove_and_remove_all(self, server, fake_keyring):
@@ -119,6 +119,24 @@ class TestTools:
         await call(server, "mailbox_remove_all")
         assert (await call(server, "mailbox_list"))["mailboxes"] == []
         assert not fake_keyring.store
+
+    async def test_technical_errors_get_a_plain_message_with_detail(self, server, fake_keyring, monkeypatch):
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        def locked(*_):
+            raise RuntimeError("keychain locked")
+
+        monkeypatch.setattr(fake_keyring, "set_password", locked)
+
+        with pytest.raises(ToolError) as exc:
+            await call(server, "mailbox_save", {"address": "p1@firma.de", "username": "p1", "password": "x"})
+
+        assert "Das hat nicht geklappt." in str(exc.value)
+        assert "Technische Meldung: RuntimeError: keychain locked" in str(exc.value)
+
+    async def test_opener_has_a_german_title(self, server):
+        tools = {t.name: t for t in await server.list_tools()}
+        assert tools["manage_mailboxes"].title == "Postfächer verwalten"
 
     async def test_opener_tells_the_model_not_to_ask_for_passwords(self, server):
         text = await call(server, "manage_mailboxes")

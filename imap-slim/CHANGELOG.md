@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.4.1] - 2026-11-14
+
+### Changed
+
+- **User-facing text in plain German** ("Sie"): extension page, settings, panel, confirmations
+  and messages. The panel explains where to find username and password (webmail, right-click
+  the address, "Konto bearbeiten"). Technical errors show a plain message with the technical
+  detail in small print below. Messages appear at the top of the panel.
+- Tool titles "E-Mail" and "Postfächer verwalten".
+
 ## [2.4.0] - 2026-10-27
 
 ### Added

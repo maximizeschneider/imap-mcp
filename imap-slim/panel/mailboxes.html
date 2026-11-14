@@ -22,30 +22,32 @@
   button.danger { color: var(--bad); }
   button:disabled { opacity: .5; cursor: default; }
   .edit { flex-basis: 100%; }
-  #msg { min-height: 1.4em; margin-top: 12px; }
+  #msg { margin-top: 6px; }
   #msg.err { color: var(--bad); }
+  .help { margin-bottom: 8px; }
   #msg.ok { color: var(--ok); }
 </style>
 </head>
 <body>
-<h1>Postfächer</h1>
-<div class="muted" id="server">Lade …</div>
+<h1>Ihre E-Mail-Postfächer</h1>
+<div class="muted" id="server">Wird geladen …</div>
+<div id="msg" role="status"></div>
 
 <div id="list"></div>
 
 <h2>Postfach hinzufügen</h2>
+<div class="muted help">So finden Sie Benutzername und Passwort: Öffnen Sie Ihr E-Mail-Programm im Browser. Klicken Sie links mit der rechten Maustaste auf die E-Mail-Adresse und wählen Sie „Konto bearbeiten“. Dort können Sie Benutzername und Passwort kopieren.</div>
 <form id="add" autocomplete="off">
-  <label>Mailadresse <input name="address" type="email" required placeholder="projekt@firma.de"></label>
+  <label>E-Mail-Adresse <input name="address" type="email" required placeholder="projekt@firma.de"></label>
   <label>Benutzername <input name="username" required></label>
   <label>Passwort <input name="password" type="password" required></label>
-  <div><button type="submit">Hinzufügen</button></div>
+  <div><button type="submit">Postfach hinzufügen</button></div>
 </form>
-<div class="muted">Die Zugangsdaten werden im Schlüsselbund dieses Computers gespeichert. Claude bekommt das Passwort nicht zu sehen.</div>
+<div class="muted">Die Zugangsdaten werden sicher auf diesem Computer gespeichert. Claude bekommt Ihr Passwort nicht zu sehen.</div>
 
-<div id="msg" role="status"></div>
 
-<h2>Alle entfernen</h2>
-<div class="muted">Vor dem Deinstallieren der Erweiterung: Das Deinstallieren allein löscht die gespeicherten Zugangsdaten nicht. Entfernt alle hier gelisteten Postfächer dieses Computers.</div>
+<h2>Alle Zugangsdaten löschen</h2>
+<div class="muted">Bevor Sie die Erweiterung entfernen, löschen Sie hier bitte alle Zugangsdaten. Sonst bleiben sie auf diesem Computer gespeichert.</div>
 <div class="row" id="clear"></div>
 
 <script type="module">
@@ -57,26 +59,35 @@ const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
 const text = (r) => (r.content || []).map((c) => c.text || "").join(" ");
 
-function say(msg, kind = "ok") { $("msg").textContent = msg; $("msg").className = kind; }
+const FAILED = "Das hat nicht geklappt. Bitte versuchen Sie es noch einmal. Wenn es weiterhin nicht klappt, wenden Sie sich an die Person, die Ihnen die Erweiterung eingerichtet hat.";
+const DETAIL = "\nTechnische Meldung: ";
+
+// Technical details go in small print below the message, for whoever helps the user.
+function say(msg, kind = "ok") {
+  const [main, detail] = msg.split(DETAIL);
+  $("msg").replaceChildren(main, ...(detail ? [el("div", { className: "muted", textContent: "Technische Meldung: " + detail })] : []));
+  $("msg").className = kind;
+}
 
 const app = new App({ name: "imap-slim-mailboxes", version: "1" }, {});
 
 async function call(name, args = {}) {
   try {
     const r = await app.callServerTool({ name, arguments: args });
-    if (r.isError) { say(text(r) || "Fehler", "err"); return null; }
+    // FastMCP prefixes every tool error with "Error executing tool <name>: "; the rest is written for the user.
+    if (r.isError) { say(text(r).replace(/^Error executing tool \S+: /, "") || FAILED, "err"); return null; }
     return r;
-  } catch (e) { say(String(e.message || e), "err"); return null; }
+  } catch (e) { say(FAILED + DETAIL + (e.message || e), "err"); return null; }
 }
 
 // Two clicks for anything destructive: the sandboxed panel cannot open confirm().
-function confirmButton(label, question, onConfirm) {
+function confirmButton(label, question, yes, onConfirm) {
   const box = el("span");
   const reset = () => box.replaceChildren(el("button", { className: "danger", textContent: label, type: "button", onclick: ask }));
   function ask() {
     box.replaceChildren(
       el("span", { textContent: question + " " }),
-      el("button", { className: "danger", textContent: "Ja", type: "button", onclick: async () => { await onConfirm(); reset(); } }),
+      el("button", { className: "danger", textContent: yes, type: "button", onclick: async () => { await onConfirm(); reset(); } }),
       " ",
       el("button", { textContent: "Abbrechen", type: "button", onclick: reset }),
     );
@@ -87,10 +98,10 @@ function confirmButton(label, question, onConfirm) {
 
 function editForm(mb, row) {
   const user = el("input", { value: mb.username, required: true });
-  const pass = el("input", { type: "password", placeholder: "leer lassen = unverändert" });
+  const pass = el("input", { type: "password", placeholder: "Nur ausfüllen, wenn sich das Passwort geändert hat" });
   const form = el("form", { className: "edit", autocomplete: "off" },
     el("label", {}, "Benutzername", user),
-    el("label", {}, "Neues Passwort", pass),
+    el("label", {}, "Passwort", pass),
     el("div", {}, el("button", { type: "submit", textContent: "Speichern" }), " ", el("button", { type: "button", textContent: "Abbrechen", onclick: () => form.remove() })),
   );
   form.onsubmit = async (ev) => {
@@ -106,19 +117,19 @@ async function refresh() {
   const r = await call("mailbox_list");
   if (!r) return;
   const { server, mailboxes } = r.structuredContent ?? JSON.parse(text(r));
-  $("server").textContent = server ? `Server: ${server}` : "Kein Server eingestellt – bitte in den Einstellungen der Erweiterung eintragen.";
+  $("server").textContent = server ? "" : "Es ist kein Mailserver eingestellt. Bitte wenden Sie sich an die Person, die Ihnen die Erweiterung eingerichtet hat.";
   const list = $("list");
   list.replaceChildren();
-  if (!mailboxes.length) list.append(el("div", { className: "row muted", textContent: "Noch kein Postfach eingerichtet." }));
+  if (!mailboxes.length) list.append(el("div", { className: "row muted", textContent: "Sie haben noch kein Postfach eingerichtet." }));
   for (const mb of mailboxes) {
     const row = el("div", { className: "row" });
     const name = el("span", { className: "grow" }, el("span", { textContent: mb.address }));
-    if (mb.default) name.append(el("span", { className: "tag", textContent: "Standard" }));
-    name.append(el("div", { className: "muted", textContent: `Benutzername: ${mb.username}` + (mb.server ? ` · Server: ${mb.server}` : "") }));
+    name.append(el("div", { className: "muted", textContent: `Benutzername: ${mb.username}` }));
+    if (mb.default) name.append(el("div", { className: "muted", textContent: "Wird verwendet, wenn Sie kein Postfach nennen." }));
     row.append(
       name,
       el("button", { type: "button", textContent: "Ändern", onclick: () => row.querySelector("form") || editForm(mb, row) }),
-      confirmButton("Entfernen", `${mb.address} entfernen?`, async () => {
+      confirmButton("Entfernen", `Postfach ${mb.address} wirklich entfernen?`, "Ja, entfernen", async () => {
         const res = await call("mailbox_remove", { address: mb.address });
         if (res) { say(text(res)); refresh(); }
       }),
@@ -126,11 +137,11 @@ async function refresh() {
     list.append(row);
   }
   $("clear").replaceChildren(mailboxes.length
-    ? confirmButton("Alle Postfächer entfernen", "Wirklich alle entfernen?", async () => {
+    ? confirmButton("Alle Zugangsdaten löschen", "Wirklich alle Zugangsdaten löschen?", "Ja, alle löschen", async () => {
         const res = await call("mailbox_remove_all");
         if (res) { say(text(res)); refresh(); }
       })
-    : el("span", { className: "muted", textContent: "Keine gespeicherten Zugangsdaten." }));
+    : el("span", { className: "muted", textContent: "Auf diesem Computer sind keine Zugangsdaten gespeichert." }));
 }
 
 $("add").onsubmit = async (ev) => {
@@ -148,7 +159,7 @@ try {
   if (theme) document.documentElement.dataset.theme = theme;
   refresh();
 } catch (e) {
-  $("server").textContent = `Verbindung zu Claude fehlgeschlagen: ${e.message || e}`;
+  $("server").textContent = FAILED;
 }
 </script>
 </body>

@@ -51,7 +51,7 @@ def save(
     """
     accounts = imap_client.list_accounts()
     if not password and (name not in accounts or not imap_client._keyring_get(f"{name}:imap_password")):
-        raise ValueError("Passwort fehlt.")
+        raise ValueError("Bitte geben Sie das Passwort ein.")
 
     if server:
         _set(f"{name}:imap_server", server)
@@ -80,9 +80,9 @@ def save_mailbox(address: str, username: str, password: str) -> None:
     exists = address in imap_client.list_accounts()
     local, _, domain = address.partition("@")
     if not exists and (not local or not domain):
-        raise ValueError("Bitte eine gültige Mailadresse eingeben.")
+        raise ValueError("Bitte geben Sie eine vollständige E-Mail-Adresse ein, zum Beispiel projekt@firma.de.")
     if not username:
-        raise ValueError("Benutzername fehlt.")
+        raise ValueError("Bitte geben Sie den Benutzernamen ein.")
     save(address, username, password, from_address=None if exists else address)
 
 
@@ -94,7 +94,7 @@ def remove(name: str) -> None:
     """
     accounts = imap_client.list_accounts()
     if name not in accounts:
-        raise ValueError(f"Postfach '{name}' nicht gefunden.")
+        raise ValueError(f"Das Postfach {name} ist nicht mehr gespeichert.")
 
     for suffix in ACCOUNT_KEYS:
         _delete(f"{name}:{suffix}")

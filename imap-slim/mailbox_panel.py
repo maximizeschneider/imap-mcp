@@ -11,7 +11,7 @@ Model calls and panel calls may reach different server processes, so no state
 lives here: every call reads and writes the keychain.
 """
 
-from functools import cache
+from functools import cache, wraps
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,32 @@ def _server_label() -> str:
     return f"{server}:{imap_client._env('PORT') or '993'}" if server else ""
 
 
+FAILED = (
+    "Das hat nicht geklappt. Bitte versuchen Sie es noch einmal. Wenn es weiterhin nicht klappt, "
+    "wenden Sie sich an die Person, die Ihnen die Erweiterung eingerichtet hat."
+)
+
+
+def _plain_errors(fn):
+    """Show the panel user a plain German message; technical detail goes below it.
+
+    ValueErrors from mailboxes are already written for the user. Anything else
+    (a locked keychain, a missing backend) is not, but whoever helps the user
+    needs it - the panel renders the part after "Technische Meldung" small.
+    """
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"{FAILED}\nTechnische Meldung: {type(e).__name__}: {e}") from e
+
+    return wrapper
+
+
 def register(mcp) -> None:
     """Add the panel resource and its tools to a FastMCP server."""
 
@@ -61,6 +87,7 @@ def register(mcp) -> None:
         return panel_html()
 
     @mcp.tool(
+        title="Postfächer verwalten",
         description="Open the panel where the user adds, changes or removes mailboxes. Use when the user wants to set up a mailbox or no account is configured.",
         meta={"ui": {"resourceUri": PANEL_URI, "visibility": ["model", "app"]}},
     )
@@ -68,20 +95,24 @@ def register(mcp) -> None:
         return "The mailbox panel is shown to the user. Never ask for passwords in chat: the user enters them in the panel."
 
     @mcp.tool(description="Server and mailboxes for the panel.", meta=APP_ONLY)
+    @_plain_errors
     def mailbox_list() -> dict[str, Any]:
         return {"server": _server_label(), "mailboxes": mailboxes.list_mailboxes()}
 
     @mcp.tool(description="Add a mailbox or change its login.", meta=APP_ONLY)
+    @_plain_errors
     def mailbox_save(address: str, username: str, password: str = "") -> str:
         mailboxes.save_mailbox(address, username, password)
-        return f"{address.strip()} gespeichert."
+        return f"Das Postfach {address.strip()} wurde gespeichert."
 
     @mcp.tool(description="Remove a mailbox.", meta=APP_ONLY)
+    @_plain_errors
     def mailbox_remove(address: str) -> str:
         mailboxes.remove(address)
-        return f"{address} entfernt."
+        return f"Das Postfach {address} wurde entfernt."
 
     @mcp.tool(description="Remove all mailboxes.", meta=APP_ONLY)
+    @_plain_errors
     def mailbox_remove_all() -> str:
         mailboxes.remove_all()
-        return "Alle Postfächer entfernt."
+        return "Alle Zugangsdaten wurden von diesem Computer gelöscht."

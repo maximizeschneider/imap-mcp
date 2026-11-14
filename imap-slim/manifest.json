@@ -1,10 +1,10 @@
 {
   "manifest_version": "0.4",
   "name": "imap-slim",
-  "display_name": "Mailbox",
-  "version": "2.4.0",
-  "description": "Read, search, flag and draft email over IMAP. Drafts only - nothing is ever sent.",
-  "long_description": "Connects Claude to your mailboxes. Claude can list, read and search mail, flag messages, save attachments and write drafts (including replies that quote the original). It never sends mail: drafts land in your Drafts folder for you to review and send from your mail program. Mailboxes are added and removed in a panel inside the chat - ask Claude to manage mailboxes; passwords go to the system keychain, not to Claude. Does not work with Outlook.com or Microsoft 365: they no longer allow password login for IMAP.",
+  "display_name": "E-Mail",
+  "version": "2.4.1",
+  "description": "Claude liest Ihre E-Mails und schreibt Entwürfe. Gesendet wird nichts.",
+  "long_description": "Claude kann Ihre E-Mails anzeigen, durchsuchen, markieren und Antwortentwürfe schreiben. Claude verschickt nie selbst etwas: Entwürfe landen im Ordner „Entwürfe“, und Sie entscheiden, ob Sie sie senden.\n\nIhre Postfächer richten Sie direkt im Chat ein: Schreiben Sie einfach „Postfächer verwalten“. Ihre Passwörter werden sicher auf diesem Computer gespeichert. Claude bekommt sie nicht zu sehen.",
   "author": {
     "name": "Ville Reijonen"
   },
@@ -36,25 +36,25 @@
   "tools": [
     {
       "name": "use_mail",
-      "description": "List, read, search and flag mail, save attachments, and create or replace drafts."
+      "description": "E-Mails anzeigen, durchsuchen, markieren und Entwürfe schreiben."
     },
     {
       "name": "manage_mailboxes",
-      "description": "Open the panel to add, change or remove mailboxes."
+      "description": "Postfächer hinzufügen, ändern oder entfernen."
     }
   ],
   "user_config": {
     "server": {
       "type": "string",
-      "title": "Incoming mail server (IMAP)",
-      "description": "Leave as is unless your IT says otherwise. Only the name or address, no https://",
+      "title": "Mailserver",
+      "description": "Bitte nicht ändern, außer Sie werden ausdrücklich darum gebeten.",
       "default": "192.168.0.110",
       "required": false
     },
     "port": {
       "type": "number",
       "title": "Port",
-      "description": "Leave at 993 unless your IT says otherwise",
+      "description": "Bitte nicht ändern, außer Sie werden ausdrücklich darum gebeten.",
       "default": 993,
       "min": 1,
       "max": 65535,

@@ -56,17 +56,17 @@ class TestSave:
         assert fake_keyring.get_password(SERVICE, "p1@firma.de:imap_password") == "x"
 
     def test_new_mailbox_without_password_is_refused(self, mb, fake_keyring):
-        with pytest.raises(ValueError, match="Passwort fehlt"):
+        with pytest.raises(ValueError, match="Passwort ein"):
             mb.save("p1@firma.de", "p1", "")
         assert keys(fake_keyring) == set()
 
     @pytest.mark.parametrize("address", ["", "p1", " @ "])
     def test_address_must_be_an_address(self, mb, address):
-        with pytest.raises(ValueError, match="Mailadresse"):
+        with pytest.raises(ValueError, match="E-Mail-Adresse"):
             mb.save_mailbox(address, "p1", "x")
 
     def test_username_is_required(self, mb):
-        with pytest.raises(ValueError, match="Benutzername"):
+        with pytest.raises(ValueError, match="Benutzernamen"):
             mb.save_mailbox("p1@firma.de", " ", "x")
 
     def test_panel_input_is_trimmed(self, mb, fake_keyring):
@@ -96,7 +96,7 @@ class TestRemove:
         assert json.loads(fake_keyring.get_password(SERVICE, "accounts")) == []
 
     def test_unknown_mailbox_is_refused(self, mb):
-        with pytest.raises(ValueError, match="nicht gefunden"):
+        with pytest.raises(ValueError, match="nicht mehr gespeichert"):
             mb.remove("x@firma.de")
 
     def test_remove_all_leaves_nothing(self, mb, fake_keyring):

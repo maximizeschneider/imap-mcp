@@ -50,7 +50,7 @@ Then configure credentials (see below).
 
 ### Claude Desktop (extension, no setup)
 
-1. Download [`releases/mailbox-2.4.0.mcpb`](../releases/mailbox-2.4.0.mcpb).
+1. Download [`releases/mailbox-2.4.1.mcpb`](../releases/mailbox-2.4.1.mcpb).
 2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it. Server and port
    are preset (`192.168.0.110`, `993`); change them only if your IT says so.
 3. Ask Claude to manage mailboxes. A panel opens in the chat: add each mailbox with its address,
@@ -60,7 +60,8 @@ Then configure credentials (see below).
 Passwords go from the panel to the system keychain; the panel's tools are hidden from the model,
 so Claude never sees them and cannot remove a mailbox on its own. All mailboxes share the server
 from the extension settings. Uninstalling leaves the keychain entries in place: use "Alle
-Postfächer entfernen" in the panel first.
+Zugangsdaten löschen" in the panel first. All texts the user sees (extension page, panel) are plain
+German, addressed with "Sie".
 
 Outlook.com and Microsoft 365 do not work: since September 2024 they accept only OAuth for IMAP.
 

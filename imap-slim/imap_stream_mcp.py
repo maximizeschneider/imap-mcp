@@ -30,7 +30,7 @@ mcp = FastMCP("imap_stream_mcp")
 @mcp.tool(
     name="use_mail",
     annotations={
-        "title": "Email Operations",
+        "title": "E-Mail",
         "readOnlyHint": False,  # draft action modifies
         "destructiveHint": False,
         "idempotentHint": False,
