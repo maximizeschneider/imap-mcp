@@ -35,3 +35,9 @@ def test_extension_page_explains_setup_like_the_panel():
     text = MANIFEST["long_description"]
     assert "Postfächer verwalten" in text
     assert "„Konto bearbeiten“" in text
+
+
+def test_short_texts_say_how_to_add_mailboxes():
+    """The short description and the settings form are what clients see first."""
+    assert "Postfächer verwalten" in MANIFEST["description"]
+    assert "Postfächer verwalten" in MANIFEST["user_config"]["server"]["description"]

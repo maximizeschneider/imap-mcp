@@ -2,8 +2,8 @@
   "manifest_version": "0.4",
   "name": "imap-slim",
   "display_name": "E-Mail",
-  "version": "2.4.2",
-  "description": "Claude liest Ihre E-Mails und schreibt Entwürfe. Gesendet wird nichts.",
+  "version": "2.4.3",
+  "description": "Claude liest Ihre E-Mails und schreibt Entwürfe. Postfächer einrichten: im Chat „Postfächer verwalten“ schreiben.",
   "long_description": "Claude kann Ihre E-Mails anzeigen, durchsuchen, markieren und Antwortentwürfe schreiben. Claude verschickt nie selbst etwas: Entwürfe landen im Ordner „Entwürfe“, und Sie entscheiden, ob Sie sie senden.\n\nSo richten Sie Ihre Postfächer ein: Schreiben Sie im Chat „Postfächer verwalten“. Es öffnet sich eine Ansicht, in der Sie für jedes Postfach die E-Mail-Adresse, den Benutzernamen und das Passwort eintragen.\n\nSo finden Sie Benutzername und Passwort: Öffnen Sie Ihr E-Mail-Programm im Browser. Klicken Sie links mit der rechten Maustaste auf die E-Mail-Adresse und wählen Sie „Konto bearbeiten“. Dort können Sie Benutzername und Passwort kopieren.\n\nIhre Passwörter werden sicher auf diesem Computer gespeichert. Claude bekommt sie nicht zu sehen.",
   "author": {
     "name": "Ville Reijonen"
@@ -47,7 +47,7 @@
     "server": {
       "type": "string",
       "title": "Mailserver",
-      "description": "Bitte nicht ändern, außer Sie werden ausdrücklich darum gebeten.",
+      "description": "Postfächer tragen Sie nicht hier ein: Schreiben Sie dazu im Chat „Postfächer verwalten“. Dieses Feld bitte nicht ändern, außer Sie werden ausdrücklich darum gebeten.",
       "default": "192.168.0.110",
       "required": false
     },

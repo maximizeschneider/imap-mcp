@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.3] - 2026-11-14
+
+### Changed
+
+- Short direction where clients look first: the extension's short description and the settings
+  field both say to write "Postfächer verwalten" in the chat to add mailboxes.
+
 ## [2.4.2] - 2026-11-14
 
 ### Changed
