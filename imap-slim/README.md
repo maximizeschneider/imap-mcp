@@ -50,7 +50,7 @@ Then configure credentials (see below).
 
 ### Claude Desktop (extension, no setup)
 
-1. Download [`releases/mailbox-2.4.1.mcpb`](../releases/mailbox-2.4.1.mcpb).
+1. Download [`releases/mailbox-2.4.2.mcpb`](../releases/mailbox-2.4.2.mcpb).
 2. Claude Desktop → Settings → Extensions → drag the file in, or double-click it. Server and port
    are preset (`192.168.0.110`, `993`); change them only if your IT says so.
 3. Ask Claude to manage mailboxes. A panel opens in the chat: add each mailbox with its address,

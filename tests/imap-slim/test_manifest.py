@@ -28,3 +28,10 @@ def test_env_enables_the_panel_and_passes_the_server():
 
 def test_declared_tools_are_the_model_visible_ones():
     assert [t["name"] for t in MANIFEST["tools"]] == ["use_mail", "manage_mailboxes"]
+
+
+def test_extension_page_explains_setup_like_the_panel():
+    """Clients read the extension page before they ever open the panel."""
+    text = MANIFEST["long_description"]
+    assert "Postfächer verwalten" in text
+    assert "„Konto bearbeiten“" in text

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2] - 2026-11-14
+
+### Changed
+
+- The extension page explains the setup: write "Postfächer verwalten" in the chat, and where to
+  find username and password - the same help the panel shows.
+
 ## [2.4.1] - 2026-11-14
 
 ### Changed
